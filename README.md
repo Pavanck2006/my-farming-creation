@@ -1,4 +1,6 @@
-# Namma Krishi – Profile, Notifications and Login Improvements
+# my-farming-creation
+
+Farmer-friendly Namma Krishi – Profile, Notifications and Login Improvements
 
 > **Problem Statement ID:** DL-SJBIT-HK26-AGR006  
 > **Platform:** MERN Stack (MongoDB, Express, React, Node.js + Vite & TailwindCSS)
