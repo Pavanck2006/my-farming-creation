@@ -65,6 +65,11 @@ const suggestions = [
 ];
 
 const formatMoney = (value) => `₹${Math.round(Number(value) || 0).toLocaleString("en-IN")}`;
+const formatChatMessage = (content) => String(content || "")
+  .replace(/\*{1,2}([^*\n]+)\*{1,2}/g, "$1")
+  .replace(/`([^`]+)`/g, "$1")
+  .replace(/^\s*[-*]\s+/gm, "• ")
+  .replace(/^\s*#{1,6}\s+/gm, "");
 
 function FarmerAvatar({ photoUrl, name, size = 32, className = "" }) {
   const [imgError, setImgError] = useState(false);
@@ -92,7 +97,7 @@ function FarmerAvatar({ photoUrl, name, size = 32, className = "" }) {
         borderRadius: "50%",
         display: "grid",
         placeItems: "center",
-        fontSize: Math.max(11, Math.round(size * 0.42)),
+        fontSize: Math.max(12, Math.round(size * 0.45)),
         fontWeight: 700
       }}
     >
@@ -557,7 +562,7 @@ function Login() {
           )}
         </form>
 
-        <div className="auth-bottom-links" style={{ marginTop: 20, textAlign: "center", fontSize: 12 }}>
+        <div className="auth-bottom-links" style={{ marginTop: 20, textAlign: "center", fontSize: 13 }}>
           <span className="muted">
             {language === "kn" ? "ಹೊಸ ರೈತರೇ? " : "New to Namma Krishi? "}
           </span>
@@ -731,7 +736,7 @@ function Register() {
           </button>
         </form>
 
-        <div className="auth-bottom-links" style={{ marginTop: 20, textAlign: "center", fontSize: 12 }}>
+        <div className="auth-bottom-links" style={{ marginTop: 20, textAlign: "center", fontSize: 13 }}>
           <span className="muted">
             {language === "kn" ? "ಈಗಾಗಲೇ ನೋಂದಾಯಿಸಿದ್ದೀರಾ? " : "Already registered? "}
           </span>
@@ -1307,8 +1312,13 @@ function Dashboard() {
         <Stat
           icon={TrendingUp}
           label={language === "kn" ? "ಮಾರುಕಟ್ಟೆ ಬೆಲೆಗಳು" : "Market prices"}
-          value={market?.available ? `${market.prices.length} listings` : "Not connected"}
-          foot={market?.available ? "Verified provider records" : "No verified data feed"}
+          value={market?.isEstimate && market.available ? `${market.prices.length} estimates` : "Unavailable"}
+          foot={
+            <Link to="/app/market" className="stat-market-link">
+              {market?.isEstimate ? "View planning estimates (not live)" : "View price details"}
+              <ArrowRight size={12} />
+            </Link>
+          }
           tone="peach"
         />
       </div>
@@ -1406,7 +1416,7 @@ function Dashboard() {
         </div>
 
         {activities.length === 0 ? (
-          <div className="empty-activities-banner" style={{ padding: "18px 0", color: "var(--muted)", fontSize: 13 }}>
+          <div className="empty-activities-banner" style={{ padding: "18px 0", color: "var(--muted)", fontSize: 14 }}>
             <p>{language === "kn" ? "ಇನ್ನೂ ಯಾವುದೇ ಚಟುವಟಿಕೆಗಳು ದಾಖಲಾಗಿಲ್ಲ. ಬೆಳೆ ಯೋಜನೆಯನ್ನು ಪ್ರಾರಂಭಿಸಿ." : "No activities recorded yet. Start by generating a crop recommendation or comparing crops."}</p>
           </div>
         ) : (
@@ -1430,20 +1440,20 @@ function Dashboard() {
                     <History size={15} />
                   </div>
                   <div>
-                    <b style={{ fontSize: 13 }}>{act.title}</b>
+                    <b style={{ fontSize: 14 }}>{act.title}</b>
                     {act.cropName && (
-                      <span className="crop-badge-small" style={{ marginLeft: 8, padding: "2px 6px", borderRadius: 4, background: "#e8f2e4", color: "#466e39", fontSize: 11, fontWeight: 600 }}>
+                      <span className="crop-badge-small" style={{ marginLeft: 8, padding: "2px 6px", borderRadius: 4, background: "#e8f2e4", color: "#466e39", fontSize: 12, fontWeight: 600 }}>
                         {act.cropName}
                       </span>
                     )}
-                    <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--muted)" }}>{act.details}</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--muted)" }}>{act.details}</p>
                   </div>
                 </div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <span style={{ fontSize: 10, color: "var(--muted)", display: "block" }}>
+                  <span style={{ fontSize: 11, color: "var(--muted)", display: "block" }}>
                     {new Date(act.createdAt).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}
                   </span>
-                  <span className="status-pill-small" style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, background: "#ebf2ea", color: "#3d6332", textTransform: "capitalize", fontWeight: 700 }}>
+                  <span className="status-pill-small" style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "#ebf2ea", color: "#3d6332", textTransform: "capitalize", fontWeight: 700 }}>
                     {act.status}
                   </span>
                 </div>
@@ -1555,7 +1565,7 @@ function HistoryPage() {
                 style={{
                   padding: "6px 14px",
                   borderRadius: 8,
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: 600,
                   border: "1px solid var(--line)",
                   background: filter === tab.id ? "var(--green)" : "var(--surface)",
@@ -1627,23 +1637,23 @@ function HistoryPage() {
                     </td>
                     <td>
                       {item.cropName ? (
-                        <span className="activity-crop-tag" style={{ background: "#e8f3e5", color: "#3e6e33", padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>
+                        <span className="activity-crop-tag" style={{ background: "#e8f3e5", color: "#3e6e33", padding: "3px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700 }}>
                           {item.cropName}
                         </span>
                       ) : (
                         <span className="muted">—</span>
                       )}
                     </td>
-                    <td style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap" }}>
+                    <td style={{ fontSize: 13, color: "var(--muted)", whiteSpace: "nowrap" }}>
                       {new Date(item.createdAt).toLocaleDateString("en-IN", {
                         month: "short",
                         day: "numeric",
                         year: "numeric"
                       })} · {new Date(item.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
                     </td>
-                    <td style={{ fontSize: 12, maxWidth: 320 }}>{item.details || "—"}</td>
+                    <td style={{ fontSize: 13, maxWidth: 320 }}>{item.details || "—"}</td>
                     <td>
-                      <span className="status-badge" style={{ padding: "3px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, textTransform: "uppercase", background: "#eef6ea", color: "#366b2e" }}>
+                      <span className="status-badge" style={{ padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700, textTransform: "uppercase", background: "#eef6ea", color: "#366b2e" }}>
                         {item.status || "Completed"}
                       </span>
                     </td>
@@ -1661,7 +1671,7 @@ function HistoryPage() {
                           {language === "kn" ? "ಶಿಫಾರಸು ವೀಕ್ಷಿಸಿ" : "View Crops"} <ArrowRight size={13} />
                         </Link>
                       ) : (
-                        <span className="muted" style={{ fontSize: 11 }}>—</span>
+                        <span className="muted" style={{ fontSize: 12 }}>—</span>
                       )}
                     </td>
                   </tr>
@@ -1745,7 +1755,7 @@ function RecommendationsPage() {
       <PageTitle
         eyebrow="CROP PLANNER"
         title={language === "kn" ? "ನಿಮ್ಮ ಜಮೀನಿಗೆ ಯಾವ ಬೆಳೆ ಸೂಕ್ತ?" : "What might grow well here?"}
-        detail="A transparent shortlist based on the information you've shared. It's a starting point for your own decision."
+        detail={`Explore ${crops.length} crops grown across Karnataka, ranked against the farm conditions you've shared. Recommendations are a starting point for your own decision.`}
         action={
           <Link to="/app/profile" className="button button-outline">
             <Settings size={15} /> Update conditions
@@ -1811,8 +1821,8 @@ function RecommendationsPage() {
 
       <div className="section-top grid-heading">
         <div>
-          <h2>Recommended for you</h2>
-          <p className="muted">Reference yields, costs and prices are indicative—not guarantees.</p>
+          <h2>Karnataka crop catalogue</h2>
+          <p className="muted">{crops.length} crop options · Reference yields, costs and prices are indicative—not guarantees.</p>
         </div>
         <Link
           to="/app/simulator"
@@ -1971,9 +1981,9 @@ function SimulatorPage() {
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 4" vertical={false} stroke="var(--line)" />
-                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--muted)" }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 10, fill: "var(--muted)" }} axisLine={false} tickLine={false} tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
-                      <Tooltip formatter={(value) => formatMoney(value)} contentStyle={{ background: "var(--surface)", borderColor: "var(--line)", borderRadius: 12, fontSize: 12 }} />
+                      <XAxis dataKey="name" tick={{ fontSize: 12, fill: "var(--muted)" }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: "var(--muted)" }} axisLine={false} tickLine={false} tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
+                      <Tooltip formatter={(value) => formatMoney(value)} contentStyle={{ background: "var(--surface)", borderColor: "var(--line)", borderRadius: 12, fontSize: 13 }} />
                       <Area type="monotone" dataKey="profit" stroke="#547c47" strokeWidth={2.5} fill="url(#profitFill)" />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -2218,11 +2228,19 @@ function MarketPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [recommendations, setRecommendations] = useState([]);
+  const [loadingRecommendations, setLoadingRecommendations] = useState(true);
+  const [recommendationError, setRecommendationError] = useState("");
+  const [weatherSummary, setWeatherSummary] = useState(null);
+  const [weatherNote, setWeatherNote] = useState("Loading local weather…");
+  const [weatherLoading, setWeatherLoading] = useState(true);
 
   const [cropSearch, setCropSearch] = useState("");
   const [selectedDistrict, setSelectedDistrict] = useState(farmer?.district || "all");
   const [selectedMarket, setSelectedMarket] = useState("all");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const soilKey = (farmer?.soils || []).join(",");
 
   const loadMarket = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -2235,7 +2253,8 @@ function MarketPage() {
           crop: cropSearch || undefined,
           district: selectedDistrict !== "all" ? selectedDistrict : undefined,
           market: selectedMarket !== "all" ? selectedMarket : undefined,
-          category: selectedCategory !== "all" ? selectedCategory : undefined
+          category: selectedCategory !== "all" ? selectedCategory : undefined,
+          refresh: isRefresh ? "true" : undefined
         }
       });
       setMarketData(data);
@@ -2252,14 +2271,97 @@ function MarketPage() {
     loadMarket();
   }, [loadMarket]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadLocalWeather = async () => {
+      setWeatherLoading(true);
+      setWeatherSummary(null);
+      if (!farmer?.district && !farmer?.taluk) {
+        setWeatherNote("Add your district and taluk in Farm Profile to use local weather.");
+        setWeatherLoading(false);
+        return;
+      }
+
+      try {
+        const { data } = await api.get("/weather", {
+          params: { district: farmer?.district, taluk: farmer?.taluk }
+        });
+        if (cancelled) return;
+        if (data.available) {
+          setWeatherSummary(data.summary);
+          setWeatherNote(`${data.summary.totalWeeklyRain} mm forecast over 7 days · ${data.location}`);
+        } else {
+          setWeatherNote(data.reason || "Local weather forecast is unavailable.");
+        }
+      } catch (weatherError) {
+        if (!cancelled) setWeatherNote(`Local weather unavailable: ${errorMessage(weatherError)}`);
+      } finally {
+        if (!cancelled) setWeatherLoading(false);
+      }
+    };
+
+    loadLocalWeather();
+    return () => { cancelled = true; };
+  }, [farmer?.district, farmer?.taluk]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadRecommendations = async () => {
+      setLoadingRecommendations(true);
+      setRecommendationError("");
+      const month = Number(selectedMonth);
+      const season = month >= 6 && month <= 9 ? "Kharif" : month >= 10 || month <= 2 ? "Rabi" : "Summer";
+      try {
+        const { data } = await api.post("/crops/recommend", {
+          soils: soilKey ? soilKey.split(",") : [],
+          waterAvailability: farmer?.waterAvailability || "medium",
+          landArea: farmer?.landArea || 1,
+          month,
+          season,
+          ...(weatherSummary ? { recentRainfall: weatherSummary.totalWeeklyRain } : {})
+        });
+        if (!cancelled) setRecommendations(data.recommendations || []);
+      } catch (recommendationLoadError) {
+        if (!cancelled) {
+          setRecommendations([]);
+          setRecommendationError(errorMessage(recommendationLoadError));
+        }
+      } finally {
+        if (!cancelled) setLoadingRecommendations(false);
+      }
+    };
+
+    loadRecommendations();
+    return () => { cancelled = true; };
+  }, [farmer?.waterAvailability, farmer?.landArea, selectedMonth, soilKey, weatherSummary]);
+
+  const monthLabel = new Date(2026, selectedMonth - 1, 1).toLocaleString(language === "kn" ? "kn" : "en", { month: "long" });
+  const recommendationByCrop = new Map(recommendations.map((crop, index) => [crop.name, { ...crop, rank: index + 1 }]));
+  const visibleMarketPrices = marketData?.isEstimate
+    ? recommendations.length
+      ? marketData.prices
+      .filter((record) => {
+        const recommendation = recommendationByCrop.get(record.crop);
+        const inSowingWindow = recommendation?.sowingMonths?.includes(Number(selectedMonth));
+        return inSowingWindow;
+      })
+      .map((record) => ({
+        ...record,
+        fitScore: recommendationByCrop.get(record.crop).score,
+        fitReasons: recommendationByCrop.get(record.crop).reasons
+      }))
+      .sort((a, b) => recommendationByCrop.get(a.crop).rank - recommendationByCrop.get(b.crop).rank)
+      : []
+    : marketData?.prices || [];
+
   return (
     <>
       <PageTitle
-        eyebrow={language === "kn" ? "ಮಾರುಕಟ್ಟೆ ಧಾರಣೆ" : "AGRICULTURAL MARKET WATCH"}
-        title={language === "kn" ? "ಕರ್ನಾಟಕ ಮಂಡಿ ದರಗಳು" : "Karnataka Mandi Prices"}
+        eyebrow={language === "kn" ? "ಮಾರುಕಟ್ಟೆ ಬೆಲೆ ಅಂದಾಜುಗಳು" : "AGRICULTURAL PRICE PLANNING"}
+        title={language === "kn" ? "ಬೆಳೆ ಬೆಲೆ ಅಂದಾಜುಗಳು" : "Crop Price Estimates"}
         detail={language === "kn"
-          ? "ಲಭ್ಯವಿದ್ದರೆ ನೈಜ ಮಾರುಕಟ್ಟೆ ದರಗಳನ್ನು ನೋಡಿ; ಡೆಮೋ ಮೌಲ್ಯಗಳನ್ನು ಸ್ಪಷ್ಟವಾಗಿ ಗುರುತಿಸಲಾಗುತ್ತದೆ."
-          : "Compare market prices across Karnataka. Demo values are clearly identified and are never presented as live quotes."}
+          ? "ಯೋಜನೆಗಾಗಿ ಬೆಳೆ ಬೆಲೆ ವ್ಯಾಪ್ತಿಗಳು. ಇವು ಇಂದಿನ ಮಾರುಕಟ್ಟೆ ದರಗಳಲ್ಲ; ಮಾರಾಟದ ಮೊದಲು ಸ್ಥಳೀಯ APMC ದರ ಪರಿಶೀಲಿಸಿ."
+          : "Illustrative crop-planner price ranges—not today's market prices. Confirm the current rate with your local APMC before selling."}
         action={
           <button
             className="button button-outline"
@@ -2267,29 +2369,47 @@ function MarketPage() {
             disabled={refreshing}
           >
             <RefreshCw size={16} className={refreshing ? "spin-icon" : ""} />
-            {refreshing ? (language === "kn" ? "ನವೀಕರಿಸಲಾಗುತ್ತಿದೆ…" : "Updating…") : (language === "kn" ? "ದರಗಳನ್ನು ನವೀಕರಿಸಿ" : "Refresh Prices")}
+            {refreshing ? (language === "kn" ? "ಮರುಲೋಡ್ ಆಗುತ್ತಿದೆ…" : "Reloading…") : (language === "kn" ? "ಅಂದಾಜು ಮರುಲೋಡ್" : "Reload Estimates")}
           </button>
         }
       />
 
-      {/* Live vs demo status banner */}
-      {marketData && (
-        <div className={`panel market-status-banner ${marketData.isLive ? "status-live" : "status-demo"}`}>
-          <div className="status-indicator">
-            <span className={`status-dot ${marketData.isLive ? "dot-live" : "dot-demo"}`} />
-            <b>{marketData.statusLabel || (marketData.isLive ? "Live market feed" : "Demo data — not live market prices")}</b>
-          </div>
-          <p className="status-desc">
-            {marketData.isLive
-              ? "Connected to the configured live market feed."
-              : (marketData.sampleNotice || "Showing demonstration values only; these prices are not verified or live.")}
+      <section className="market-estimate-hero" aria-label="Agriculture price planning estimates">
+        <img src="/crop-market-fields.svg" alt="Illustration of green crop fields under a sunny sky" />
+        <div className="market-estimate-hero-copy">
+          <span className="market-estimate-badge">PLANNING REFERENCE · NOT A LIVE MARKET QUOTE</span>
+          <h2>Plan your harvest with confidence</h2>
+          <p>
+            {marketData?.reason || "Illustrative crop-planner estimates only. Confirm current prices with your local APMC before selling."}
           </p>
-          <small className="muted">Source: {marketData.source || "Not provided"} · Updated: {marketData.fetchedAt ? new Date(marketData.fetchedAt).toLocaleString() : "Unavailable"}</small>
+          <small>Source: {marketData?.source || "Namma Krishi crop-planner assumptions"}</small>
         </div>
-      )}
+      </section>
 
       {/* Interactive Filter Bar */}
       <div className="panel market-filter-box">
+        <div className="market-crop-context">
+          <label className="filter-select-label">
+            <span>Planning month / season</span>
+            <select value={selectedMonth} onChange={(event) => setSelectedMonth(Number(event.target.value))}>
+              {Array.from({ length: 12 }, (_, index) => {
+                const month = index + 1;
+                const season = month >= 6 && month <= 9 ? "Kharif" : month >= 10 || month <= 2 ? "Rabi" : "Summer";
+                return (
+                  <option value={month} key={month}>
+                    {new Date(2026, index, 1).toLocaleString(language === "kn" ? "kn" : "en", { month: "long" })} · {season}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+          <div className="market-farm-context">
+            <b>Recommendation inputs</b>
+            <span>Soil: {soilKey ? soilKey.replaceAll(",", ", ") : "not set"} · Water: {farmer?.waterAvailability || "medium"}</span>
+            <small>{weatherLoading ? "Checking local forecast…" : weatherNote}</small>
+          </div>
+          <Link to="/app/profile" className="text-button">Update farm profile <ArrowRight size={14} /></Link>
+        </div>
         <div className="filter-inputs-grid">
           <label className="search-field">
             <Search size={18} />
@@ -2302,18 +2422,18 @@ function MarketPage() {
 
           <label className="filter-select-label">
             <span>District</span>
-            <select value={selectedDistrict} onChange={(e) => { setSelectedDistrict(e.target.value); setSelectedMarket("all"); }}>
-              <option value="all">All Karnataka Districts</option>
-              {marketData?.availableDistricts?.map((dist) => (
+            <select value={marketData?.isEstimate ? "all" : selectedDistrict} disabled={marketData?.isEstimate} onChange={(e) => { setSelectedDistrict(e.target.value); setSelectedMarket("all"); }}>
+              <option value="all">{marketData?.isEstimate ? "General reference" : "All Karnataka Districts"}</option>
+              {[...new Set([farmer?.district, ...(marketData?.availableDistricts || [])].filter(Boolean))].map((dist) => (
                 <option key={dist} value={dist}>{dist}</option>
               ))}
             </select>
           </label>
 
           <label className="filter-select-label">
-            <span>Market / Mandi</span>
-            <select value={selectedMarket} onChange={(e) => setSelectedMarket(e.target.value)}>
-              <option value="all">All APMC Mandis</option>
+            <span>{marketData?.isEstimate ? "Market (estimates only)" : "Market / Mandi"}</span>
+            <select value={marketData?.isEstimate ? "all" : selectedMarket} disabled={marketData?.isEstimate} onChange={(e) => setSelectedMarket(e.target.value)}>
+              <option value="all">{marketData?.isEstimate ? "Planning estimates only" : "All APMC Mandis"}</option>
               {marketData?.availableMarkets?.map((mkt) => (
                 <option key={mkt} value={mkt}>{mkt}</option>
               ))}
@@ -2323,7 +2443,7 @@ function MarketPage() {
 
         <div className="category-pills-row">
           <span className="pills-label">Category:</span>
-          {["all", "Cereals & Millets", "Pulses", "Oilseeds", "Vegetables", "Commercial"].map((cat) => (
+          {(marketData?.categories || ["all", "Cereals & Millets", "Pulses", "Oilseeds", "Commercial"]).map((cat) => (
             <button
               key={cat}
               type="button"
@@ -2337,6 +2457,7 @@ function MarketPage() {
       </div>
 
       {error && <Notice kind="warning">{error}</Notice>}
+      {recommendationError && <Notice kind="warning">Could not personalize crop suggestions: {recommendationError}</Notice>}
 
       {/* Historical Price Chart */}
       {marketData?.trends && marketData.trends.length > 1 && (
@@ -2360,11 +2481,11 @@ function MarketPage() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--line)" />
-                <XAxis dataKey="date" tick={{ fontSize: 13, fill: "var(--muted)" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 13, fill: "var(--muted)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${v}`} />
+                <XAxis dataKey="date" tick={{ fontSize: 14, fill: "var(--muted)" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 14, fill: "var(--muted)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${v}`} />
                 <Tooltip
                   formatter={(value) => [`₹${Number(value).toLocaleString("en-IN")} / quintal`, "Modal Price"]}
-                  contentStyle={{ background: "var(--surface)", borderColor: "var(--line)", borderRadius: 10, fontSize: 14 }}
+                  contentStyle={{ background: "var(--surface)", borderColor: "var(--line)", borderRadius: 10, fontSize: 15 }}
                 />
                 <Area type="monotone" dataKey="price" stroke="#48723c" strokeWidth={3} fill="url(#mandiPriceGrad)" />
               </AreaChart>
@@ -2400,26 +2521,35 @@ function MarketPage() {
       )}
 
       {/* Detailed Mandi Table */}
-      {loading ? (
+      {loading || loadingRecommendations ? (
         <Loading label={language === "kn" ? "ಮಾರುಕಟ್ಟೆ ದರಗಳನ್ನು ಲೋಡ್ ಮಾಡಲಾಗುತ್ತಿದೆ…" : "Loading market price data…"} />
-      ) : marketData?.prices?.length ? (
+      ) : visibleMarketPrices.length ? (
         <div className="panel market-table-panel">
+          <div className="market-results-heading">
+            <div>
+                  <span className="eyebrow">CROPS TO EXPLORE · {monthLabel}</span>
+                  <p>Showing crops with a sowing window this month, ranked for your soil, water availability, local weather outlook, and season. Estimates are not live prices.</p>
+            </div>
+          </div>
           <div className="table-scroll">
             <table className="mandi-table">
               <thead>
                 <tr>
                   <th>Crop / Vegetable</th>
-                  <th>Market / Mandi</th>
-                  <th>District</th>
-                  <th>Min Price</th>
-                  <th>Max Price</th>
-                  <th>Modal Price</th>
-                  <th>Market Date</th>
+                  <th>{marketData.isEstimate ? "Quote type" : "Market / Mandi"}</th>
+                  <th>{marketData.isEstimate ? "Location" : "District"}</th>
+                  {marketData.isEstimate && <th>Reference yield (q/acre)</th>}
+                  <th>{marketData.isEstimate ? "Low estimate" : "Min Price"}</th>
+                  <th>{marketData.isEstimate ? "High estimate" : "Max Price"}</th>
+                  <th>{marketData.isEstimate ? "Reference price" : "Modal Price"}</th>
+                  {marketData.isEstimate && <th>Illustrative gross value / acre</th>}
+                  {marketData.isEstimate && <th>Suitability</th>}
+                  <th>{marketData.isEstimate ? "Observed market date" : "Market Date"}</th>
                   <th>Data Source</th>
                 </tr>
               </thead>
               <tbody>
-                {marketData.prices.map((row, i) => (
+                {visibleMarketPrices.map((row, i) => (
                   <tr key={`${row.crop}-${row.market}-${row.date}-${i}`}>
                     <td>
                       <div className="crop-cell-title">
@@ -2428,14 +2558,17 @@ function MarketPage() {
                       </div>
                     </td>
                     <td><b>{row.market}</b></td>
-                    <td>{row.district}</td>
+                    <td>{row.district}{marketData.isEstimate && <small className="market-reasons">{row.fitReasons.slice(0, 3).join(" · ")}</small>}</td>
+                    {marketData.isEstimate && <td>{row.yieldPerAcre.toLocaleString("en-IN")}</td>}
                     <td className="price-muted">{formatMoney(row.minPrice)}</td>
                     <td className="price-muted">{formatMoney(row.maxPrice)}</td>
                     <td className="modal-price-cell">
                       <strong>{formatMoney(row.modalPrice)}</strong>
                       <small className="muted"> / quintal</small>
                     </td>
-                    <td>{new Date(row.date).toLocaleDateString()}</td>
+                    {marketData.isEstimate && <td>{formatMoney(row.estimatedGrossValuePerAcre)}</td>}
+                    {marketData.isEstimate && <td><span className="market-fit-score">{row.fitScore}/100</span></td>}
+                    <td>{marketData.isEstimate ? "Planning estimate" : row.date ? new Date(`${row.date}T00:00:00`).toLocaleDateString() : "Not available"}</td>
                     <td><span className="source-badge">{row.source || marketData.source || "Not provided"}</span></td>
                   </tr>
                 ))}
@@ -2446,8 +2579,12 @@ function MarketPage() {
       ) : (
         <div className="panel blank-panel">
           <TrendingUp size={48} className="muted" />
-          <h3>No mandi prices found</h3>
-          <p>No price records match the selected crop, district, or category filter.</p>
+          <h3>{marketData?.isEstimate ? recommendationError ? "Crop recommendations are unavailable" : "No crop sowing window matches this month" : "No mandi prices found"}</h3>
+          <p>{marketData?.isEstimate
+            ? recommendationError
+              ? "We could not rank crops for your soil, weather, and selected season. Please retry or check your farm profile."
+              : "No crop in the current planning guide has a sowing window for this month and selected search/category. Try another month or clear the filters."
+            : marketData?.reason || error || "No official price records match the selected crop, district, market, or category."}</p>
           <button
             type="button"
             className="button button-outline"
@@ -2629,6 +2766,7 @@ function AssistantPage() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError] = useState("");
   const [clearing, setClearing] = useState(false);
+  const [aiStatus, setAiStatus] = useState(null);
 
   const defaultGreeting = useMemo(() => ({
     role: "assistant",
@@ -2659,6 +2797,12 @@ function AssistantPage() {
   useEffect(() => {
     loadHistory();
   }, [loadHistory]);
+
+  useEffect(() => {
+    api.get("/assistant/status")
+      .then(({ data }) => setAiStatus(data))
+      .catch((reason) => setAiStatus({ available: false, error: errorMessage(reason) }));
+  }, []);
 
   const clearHistory = async () => {
     if (!window.confirm(language === "kn" ? "ಚಾಟ್ ಇತಿಹಾಸವನ್ನು ಅಳಿಸಲು ನೀವು ಖಚಿತವಾಗಿದ್ದೀರಾ?" : "Are you sure you want to clear your conversation history?")) return;
@@ -2730,7 +2874,12 @@ function AssistantPage() {
             >
               <Clock size={14} /> {language === "kn" ? "ಇತಿಹಾಸ ಅಳಿಸಿ" : "Clear Chat"}
             </button>
-            <div className="ai-status"><span /> {language === "kn" ? "ಸಹಾಯಕ ಸಿದ್ಧವಾಗಿದೆ" : "Assistant ready"}</div>
+            <div className="ai-status">
+              <span />
+              {aiStatus?.available
+                ? (language === "kn" ? "ಬಹುಭಾಷಾ AI ಹೊಂದಿಸಲಾಗಿದೆ" : "Multilingual AI configured")
+                : (language === "kn" ? "ಕೃಷಿ ಸಹಾಯಕ ಸಿದ್ಧವಾಗಿದೆ" : "Farm assistant ready")}
+            </div>
           </div>
         }
       />
@@ -2749,6 +2898,17 @@ function AssistantPage() {
             </div>
             <Link to="/app/profile" aria-label="Edit farm profile"><Settings size={18} /></Link>
           </div>
+          <div className="chat-language-note" role="status">
+            <span aria-hidden="true">🌐</span>
+            {aiStatus?.available
+              ? (language === "kn"
+                ? "ನಿಮ್ಮ ಭಾಷೆಯಲ್ಲಿ ಪ್ರಶ್ನಿಸಿ — ಹೊಂದಿಸಿದ AI ಮಾದರಿ ಅದೇ ಭಾಷೆಯಲ್ಲಿ ಉತ್ತರಿಸುತ್ತದೆ."
+                : "Ask in your language; the configured AI model will reply in the same language.")
+              : (language === "kn"
+                ? "ಬಹುಭಾಷಾ AI ಗಾಗಿ Ollama (API ಕೀ ಅಗತ್ಯವಿಲ್ಲ) ಅಥವಾ Gemini API ಕೀ ಹೊಂದಿಸಿ. ಈಗಿನ ಸಹಾಯಕ ಇಂಗ್ಲಿಷ್ ಮತ್ತು ಕನ್ನಡದಲ್ಲಿ ಉತ್ತರಿಸುತ್ತದೆ."
+                : "For multilingual AI, configure local Ollama (no API key) or a Gemini API key. Built-in guidance currently supports English and Kannada.")
+            }
+          </div>
 
           {historyLoading ? (
             <Loading label={language === "kn" ? "ಹಿಂದಿನ ಸಂಭಾಷಣೆಯನ್ನು ಲೋಡ್ ಮಾಡಲಾಗುತ್ತಿದೆ…" : "Loading conversation history…"} />
@@ -2765,13 +2925,13 @@ function AssistantPage() {
                   </div>
                   <div className="chat-bubble-wrap">
                     <div className={`chat-bubble ${message.role === "user" ? "user-bubble" : ""}`}>
-                      {message.content}
+                      {message.role === "assistant" ? formatChatMessage(message.content) : message.content}
                     </div>
                     {message.role === "assistant" && (
                       <span className="chat-mode">
                         {message.mode === "ai"
-                          ? "🤖 Live AI Response · Verified with Namma Krishi agronomy rules"
-                          : "🌾 Namma Krishi Agricultural Engine"}
+                          ? "🌐 AI response · Check important advice with a local expert"
+                          : "🌾 Built-in crop guidance"}
                       </span>
                     )}
                   </div>
@@ -2781,7 +2941,7 @@ function AssistantPage() {
                 <div className="chat-row">
                   <div className="chat-avatar"><Sparkles size={18} /></div>
                   <div className="chat-bubble typing">
-                    <span style={{ fontSize: 13, marginRight: 8 }}>
+                    <span style={{ fontSize: 14, marginRight: 8 }}>
                       {language === "kn" ? "ನಮ್ಮ ಕೃಷಿ AI ಉತ್ತರಿಸುತ್ತಿದೆ…" : "Namma Krishi AI is generating advice…"}
                     </span>
                     <i /><i /><i />
@@ -2846,7 +3006,7 @@ function AssistantPage() {
             <span><Check size={16} /> <b>Mandi Rates:</b> Verified Karnataka APMC benchmarks</span>
             <span><Check size={16} /> <b>Yield & Profit:</b> Gross Revenue & Net Profit formulas</span>
             <span><Check size={16} /> <b>Pest Protection:</b> Integrated IPM & organic solutions</span>
-            <span><Check size={16} /> <b>Bilingual:</b> Supports Kannada (ಕನ್ನಡ) & English</span>
+            <span><Check size={16} /> <b>Multilingual chat:</b> Ask in your language when an AI model is configured</span>
           </div>
         </aside>
       </div>

@@ -101,7 +101,28 @@ async function runTests() {
     assert.strictEqual(res.data.farmer.name, "Ramesh Gowda");
   });
 
-  // 7. Profile editing PUT /api/farmers/profile
+  // 7. Assistant provider status and chat
+  await test("GET /api/assistant/status reports multilingual AI configuration", async () => {
+    const res = await client.get("/assistant/status", {
+      headers: { Authorization: "Bearer " + token1 }
+    });
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(typeof res.data.available, "boolean");
+    assert.ok(res.data.provider === null || typeof res.data.provider === "string");
+  });
+
+  await test("POST /api/assistant/chat returns agricultural guidance", async () => {
+    const res = await client.post(
+      "/assistant/chat",
+      { message: "How do I calculate crop yield and profit?", language: "en" },
+      { headers: { Authorization: "Bearer " + token1 } }
+    );
+    assert.strictEqual(res.status, 200);
+    assert.ok(res.data.text);
+    assert.ok(["ai", "knowledge-engine"].includes(res.data.mode));
+  });
+
+  // 8. Profile editing PUT /api/farmers/profile
   await test("PUT /api/farmers/profile updates profile and immediately returns updated data", async () => {
     const res = await client.put(
       "/farmers/profile",
@@ -125,7 +146,7 @@ async function runTests() {
     assert.strictEqual(res.data.farmer.profileComplete, true);
   });
 
-  // 8. Profile Photo Upload POST /api/farmers/profile/photo
+  // 9. Profile Photo Upload POST /api/farmers/profile/photo
   await test("POST /api/farmers/profile/photo validates and stores profile photo", async () => {
     const tinyPng = Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",

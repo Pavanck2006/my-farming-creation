@@ -6,6 +6,9 @@ export function recommend(input = {}) {
   const soils = Array.isArray(input.soils) ? input.soils : [];
   const water = ["low", "medium", "high"].includes(input.waterAvailability) ? input.waterAvailability : "medium";
   const rain = bound(Number(input.rainfall ?? 650), 0, 2500);
+  const recentRain = input.recentRainfall !== undefined && input.recentRainfall !== null && Number.isFinite(Number(input.recentRainfall))
+    ? bound(Number(input.recentRainfall), 0, 500)
+    : null;
   const month = Number(input.month ?? new Date().getMonth() + 1);
   const area = bound(Number(input.landArea ?? 1), 0.1, 100000);
   const season = input.season || (month >= 6 && month <= 9 ? "Kharif" : month >= 10 || month <= 2 ? "Rabi" : "Summer");
@@ -16,8 +19,12 @@ export function recommend(input = {}) {
     const rainPoints = rain < 400 ? (crop.waterScore > 75 ? 22 : 8)
       : rain > 1200 ? (crop.water === "high" ? 22 : crop.water === "medium" ? 16 : 9)
         : crop.water === "medium" ? 19 : 17;
+    const weatherPoints = recentRain === null ? 0
+      : recentRain >= 25 ? (crop.water === "high" ? 9 : crop.water === "medium" ? 4 : -5)
+        : recentRain < 5 ? (crop.waterScore > 75 ? 8 : crop.water === "high" ? -6 : 0)
+          : 0;
     const seasonPoints = crop.sowMonths.includes(month) || crop.season.includes(season) ? 18 : 6;
-    const total = Math.round(bound(soilPoints + waterPoints + rainPoints + seasonPoints + Math.max(0, 14 - crop.riskScore * 0.12), 0, 100));
+    const total = Math.round(bound(soilPoints + waterPoints + rainPoints + weatherPoints + seasonPoints + Math.max(0, 14 - crop.riskScore * 0.12), 0, 100));
     const price = bound(Number(input.prices?.[crop.name] ?? crop.price), 0, 1000000);
     const cost = bound(Number(input.costs?.[crop.name] ?? crop.costPerAcre), 0, 1000000);
     const yieldPerAcre = crop.yieldPerAcre * (1 + (rain - 650) / 10000);
@@ -30,6 +37,9 @@ export function recommend(input = {}) {
     else reasons.push("soil match is limited; seek local advice");
     reasons.push(water === "low" && crop.waterScore > 75 ? "fits lower water availability" : water === "high" ? "water supply is available for this crop" : `has ${crop.water} water needs`);
     reasons.push(crop.sowMonths.includes(month) ? "the reference sowing window includes this month" : "check the local sowing window before planting");
+    if (recentRain !== null) {
+      reasons.push(recentRain >= 25 ? "recent forecast indicates wet conditions" : recentRain < 5 ? "recent forecast indicates dry conditions" : "recent forecast indicates moderate rainfall");
+    }
     return {
       ...crop, score: total, reasons, expectedYield: Number((yieldPerAcre * area).toFixed(1)),
       cost: totalCost * area, revenue: revenue * area, profit: profitPerAcre * area,

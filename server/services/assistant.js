@@ -1,11 +1,32 @@
 import axios from "axios";
-import { DEMO_MARKET_RECORDS } from "./market.js";
+import { getMarketPrices } from "./market.js";
 import { crops } from "../data/crops.js";
 
-// System prompt for external LLM API if configured
+const isLocalAIUrl = (value) => {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" && ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+  } catch {
+    return false;
+  }
+};
+
+export function getAssistantAIStatus() {
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY);
+  const aiUrl = process.env.AI_API_URL;
+  const hasConfiguredCompatibleAI = Boolean(
+    aiUrl && (process.env.AI_API_KEY || process.env.OPENAI_API_KEY || isLocalAIUrl(aiUrl))
+  );
+  return {
+    available: hasGemini || hasConfiguredCompatibleAI,
+    provider: hasGemini ? "Gemini" : hasConfiguredCompatibleAI ? (isLocalAIUrl(aiUrl) ? "local model" : "AI provider") : null
+  };
+}
+
 const buildSystemPrompt = (context) => `
-You are Namma Krishi AI (ನಮ್ಮ ಕೃಷಿ AI), an empathetic, knowledgeable, and reliable agricultural assistant built for Karnataka's farmers.
-Respond in ${context.language === "kn" ? "Kannada (ಕನ್ನಡ)" : "English"}.
+You are Namma Krishi AI (ನಮ್ಮ ಕೃಷಿ AI), an empathetic, knowledgeable, and reliable agricultural assistant built for farmers.
+Language: Detect the language of the farmer's latest message and reply in that same language and writing system. Support the language the farmer uses rather than limiting replies to the app's English/Kannada interface. If the farmer explicitly asks for another language, use it. For mixed-language messages, reply in the dominant language. Keep the answer clear and practical.
+Formatting: Use readable plain text, short paragraphs, and numbered steps. Do not output Markdown heading, bold, or italic markers.
 Farmer Profile & Farm Context:
 - Location: ${context.taluk ? `${context.taluk}, ` : ""}${context.district || "Karnataka"}
 - Soil Type: ${context.soils?.join(", ") || "General arable soil"}
@@ -15,24 +36,14 @@ Farmer Profile & Farm Context:
 
 Guidelines:
 1. Provide accurate, practical farming advice covering crop selection, weather adaptation, market prices, yield & profit calculations, and integrated pest protection.
-2. For yield and profit calculations, always emphasize the formulas:
+2. Never invent live market prices, weather observations, dates, sources, or facts. Clearly identify estimates and advise checking local sources when verified data is unavailable.
+3. For yield and profit calculations, always emphasize the formulas:
    - Gross Revenue = Expected Yield (q/acre) × Market Price (₹/q)
    - Estimated Net Profit = Gross Revenue − Cultivation Cost (₹/acre)
    Remind the farmer that these are model estimates and never guaranteed.
-3. For pest control, recommend Integrated Pest Management (IPM), including field sanitation, organic neem oil (Azadirachtin), pheromone traps, and advise consulting the nearest Raitha Samparka Kendra (RSK) / KVK.
-4. Keep the tone respectful, clear, and encouraging for rural farmers.
+4. For pest control, recommend Integrated Pest Management (IPM), including field sanitation, organic neem oil (Azadirachtin), pheromone traps, and advise consulting the nearest Raitha Samparka Kendra (RSK) / KVK. Do not provide pesticide doses unless verified for the specific crop and region; direct the farmer to the product label and local agricultural expert.
+5. Keep the tone respectful, clear, and encouraging for farmers.
 `;
-
-// Helper: find mandi price for a crop in farmer's district or Karnataka
-function getMandiQuote(cropName, district = "") {
-  const normCrop = (cropName || "").toLowerCase();
-  const normDist = (district || "").toLowerCase();
-  const districtMatch = DEMO_MARKET_RECORDS.find(
-    (r) => r.crop.toLowerCase().includes(normCrop) && (!normDist || r.district.toLowerCase().includes(normDist))
-  );
-  if (districtMatch) return districtMatch;
-  return DEMO_MARKET_RECORDS.find((r) => r.crop.toLowerCase().includes(normCrop));
-}
 
 export async function answerAssistant(message, context = {}) {
   const isKannada = context.language === "kn" || /[\u0C80-\u0CFF]/.test(message);
@@ -42,19 +53,22 @@ export async function answerAssistant(message, context = {}) {
   const geminiKey = process.env.GEMINI_API_KEY;
   const openaiKey = process.env.AI_API_KEY || process.env.OPENAI_API_KEY;
   const aiUrl = process.env.AI_API_URL;
+  const recentHistory = (Array.isArray(context.chatHistory) ? context.chatHistory : [])
+    .filter((entry) => ["user", "assistant"].includes(entry?.role) && typeof entry.content === "string")
+    .slice(-10);
 
   // Try Gemini API if key is present
   if (geminiKey) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
       const payload = {
+        systemInstruction: { parts: [{ text: buildSystemPrompt(context) }] },
         contents: [
-          {
-            role: "user",
-            parts: [
-              { text: `${buildSystemPrompt(context)}\n\nFarmer Question: ${message}` }
-            ]
-          }
+          ...recentHistory.map(({ role, content }) => ({
+            role: role === "assistant" ? "model" : "user",
+            parts: [{ text: content }]
+          })),
+          { role: "user", parts: [{ text: message }] }
         ]
       };
       const response = await axios.post(url, payload, { timeout: 15000 });
@@ -66,7 +80,7 @@ export async function answerAssistant(message, context = {}) {
   }
 
   // Try OpenAI-compatible API if configured
-  if (aiUrl && openaiKey) {
+  if (aiUrl && (openaiKey || isLocalAIUrl(aiUrl))) {
     try {
       const response = await axios.post(
         aiUrl,
@@ -74,12 +88,14 @@ export async function answerAssistant(message, context = {}) {
           model: process.env.AI_MODEL || "gpt-4o-mini",
           messages: [
             { role: "system", content: buildSystemPrompt(context) },
+            ...recentHistory,
             { role: "user", content: message }
           ]
         },
         {
-          headers: { Authorization: `Bearer ${openaiKey}` },
-          timeout: 15000
+          headers: openaiKey ? { Authorization: `Bearer ${openaiKey}` } : {},
+          timeout: 30000,
+          proxy: isLocalAIUrl(aiUrl) ? false : undefined
         }
       );
       const content = response.data.choices?.[0]?.message?.content;
@@ -101,12 +117,9 @@ export async function answerAssistant(message, context = {}) {
         text: `📊 **ಬೆಳೆ ಇಳುವರಿ ಮತ್ತು ನಿವ್ವಳ ಲಾಭ ಲೆಕ್ಕಾಚಾರದ ಸೂತ್ರಗಳು:**\n\n` +
               `1. **ಒಟ್ಟು ಆದಾಯ (Gross Revenue)** = ನಿರೀಕ್ಷಿತ ಇಳುವರಿ (ಕ್ವಿಂಟಾಲ್/ಎಕರೆ) × ಮಾರುಕಟ್ಟೆ ಬೆಲೆ (₹/ಕ್ವಿಂಟಾಲ್)\n` +
               `2. **ನಿವ್ವಳ ಲಾಭ (Net Profit)** = ಒಟ್ಟು ಆದಾಯ − ಸಾಗುವಳಿ ವೆಚ್ಚ (₹/ಎಕರೆ)\n\n` +
-              `🌾 **ಕರ್ನಾಟಕದ ಪ್ರಮುಖ ಬೆಳೆಗಳ ಅಂದಾಜು ಉದಾಹರಣೆಗಳು (ಪ್ರತಿ ಎಕರೆಗೆ):**\n` +
-              `• **ರಾಗಿ (Ragi):** ಇಳುವರಿ ~10 ಕ್ವಿಂ, ದರ ~₹3,800/ಕ್ವಿಂ = ಒಟ್ಟು ಆದಾಯ ₹38,000. ಸಾಗುವಳಿ ವೆಚ್ಚ ~₹13,500. **ಅಂದಾಜು ನಿವ್ವಳ ಲಾಭ: ~₹24,500 / ಎಕರೆ**.\n` +
-              `• **ಮುಸುಕಿನ ಜೋಳ (Maize):** ಇಳುವರಿ ~24 ಕ್ವಿಂ, ದರ ~₹2,200/ಕ್ವಿಂ = ಒಟ್ಟು ಆದಾಯ ₹52,800. ಸಾಗುವಳಿ ವೆಚ್ಚ ~₹24,500. **ಅಂದಾಜು ನಿವ್ವಳ ಲಾಭ: ~₹28,300 / ಎಕರೆ**.\n` +
-              `• **ಕಡಲೆಕಾಯಿ (Groundnut):** ಇಳುವರಿ ~8 ಕ್ವಿಂ, ದರ ~₹6,200/ಕ್ವಿಂ = ಒಟ್ಟು ಆದಾಯ ₹49,600. ಸಾಗುವಳಿ ವೆಚ್ಚ ~₹22,000. **ಅಂದಾಜು ನಿವ್ವಳ ಲಾಭ: ~₹27,600 / ಎಕರೆ**.\n` +
-              `• **ಭತ್ತ (Paddy):** ಇಳುವರಿ ~22 ಕ್ವಿಂ, ದರ ~₹2,300/ಕ್ವಿಂ = ಒಟ್ಟು ಆದಾಯ ₹50,600. ಸಾಗುವಳಿ ವೆಚ್ಚ ~₹34,000. **ಅಂದಾಜು ನಿವ್ವಳ ಲಾಭ: ~₹16,600 / ಎಕರೆ**.\n\n` +
-              `⚠️ *ಸೂಚನೆ: ಇವು ಕೃಷಿ ಉಲ್ಲೇಖದ ಮಾದರಿ ಅಂದಾಜುಗಳು ಮಾತ್ರ. ನೈಜ ಇಳುವರಿ ಮತ್ತು ಲಾಭ ಮಳೆ, ತಳಿ, ಮತ್ತು ಮಾರುಕಟ್ಟೆ ಏರಿಳಿತದ ಮೇಲೆ ಅವಲಂಬಿತವಾಗಿರುತ್ತದೆ.*`,
+              `🌾 **ಅಂದಾಜುಗಳ ಕುರಿತು:**\n` +
+              `ಇಳುವರಿ ಮತ್ತು ಸಾಗುವಳಿ ವೆಚ್ಚವು ಸ್ಥಳೀಯ ಪರಿಸ್ಥಿತಿಗಳ ಮೇಲೆ ಅವಲಂಬಿತವಾಗಿರುತ್ತದೆ. ಮಾರುಕಟ್ಟೆ ಪುಟದ ಬೆಲೆಗಳು ಯೋಜನಾ ಅಂದಾಜುಗಳು ಮಾತ್ರ; ಇಂದಿನ ಮಾರಾಟದ ದರಕ್ಕಾಗಿ ಸ್ಥಳೀಯ APMC ಅನ್ನು ಸಂಪರ್ಕಿಸಿ.\n\n` +
+              `⚠️ *ಇಳುವರಿ ಮತ್ತು ಲಾಭದ ಅಂದಾಜುಗಳು ಖಾತರಿಯಲ್ಲ. ಸ್ಥಳೀಯ ಕೃಷಿ ಅಧಿಕಾರಿಯನ್ನು ಸಂಪರ್ಕಿಸಿ.*`,
         mode: "knowledge-engine"
       };
     }
@@ -114,41 +127,35 @@ export async function answerAssistant(message, context = {}) {
       text: `📊 **Crop Yield and Net Profit Calculation Formulas:**\n\n` +
             `1. **Gross Revenue** = Expected Yield (quintals/acre) × Market Price (₹/quintal)\n` +
             `2. **Estimated Net Profit** = Gross Revenue − Cultivation Cost (₹/acre)\n\n` +
-            `🌾 **Illustrative Benchmarks for Karnataka (per acre):**\n` +
-            `• **Ragi (Finger Millet):** Expected Yield ~10 q/ac @ ₹3,800/q = ₹38,000 Revenue. Cultivation cost ~₹13,500. **Estimated Net Profit: ~₹24,500 / acre**.\n` +
-            `• **Maize:** Expected Yield ~24 q/ac @ ₹2,200/q = ₹52,800 Revenue. Cultivation cost ~₹24,500. **Estimated Net Profit: ~₹28,300 / acre**.\n` +
-            `• **Groundnut:** Expected Yield ~8 q/ac @ ₹6,200/q = ₹49,600 Revenue. Cultivation cost ~₹22,000. **Estimated Net Profit: ~₹27,600 / acre**.\n` +
-            `• **Paddy:** Expected Yield ~22 q/ac @ ₹2,300/q = ₹50,600 Revenue. Cultivation cost ~₹34,000. **Estimated Net Profit: ~₹16,600 / acre**.\n\n` +
-            `💡 *You can also use our interactive "Calculate My Own Profit" calculator on any crop card in the Crop Planner to test your own yield and price scenarios!*`,
+            `🌾 **About estimates:**\n` +
+            `Yield and cultivation costs depend on local conditions. Prices on the Market page are planning assumptions only, not current market quotes. Contact your local APMC for today's rate.\n\n` +
+            `💡 *Use the crop planner's profit calculator with a current local market quote. Estimates are not guaranteed.*`,
       mode: "knowledge-engine"
     };
   }
 
   // Intent B: Market Prices & Mandi Rates
   if (q.includes("market") || q.includes("mandi") || q.includes("price") || q.includes("rate") || q.includes("ಬೆಲೆ") || q.includes("ದರ") || q.includes("ಮಾರುಕಟ್ಟೆ") || q.includes("ಮಂಡಿ")) {
-    const quoteRagi = getMandiQuote("Ragi", context.district);
-    const quoteMaize = getMandiQuote("Maize", context.district);
-    const quoteTomato = getMandiQuote("Tomato", context.district);
-    const quoteTur = getMandiQuote("Tur", context.district);
+    const marketData = await getMarketPrices({ district: context.district });
+    const quotes = marketData.prices.slice(0, 5).map((record) =>
+      marketData.isEstimate
+        ? `• **${record.crop}** — illustrative reference ₹${record.modalPrice.toLocaleString("en-IN")}/q (planning range ₹${record.minPrice.toLocaleString("en-IN")}–₹${record.maxPrice.toLocaleString("en-IN")}/q).`
+        : `• **${record.crop}** — ${record.market}, ${record.district}: modal ₹${record.modalPrice.toLocaleString("en-IN")}/q (min ₹${record.minPrice.toLocaleString("en-IN")}, max ₹${record.maxPrice.toLocaleString("en-IN")}); date ${record.date}.`
+    );
+    const recordsText = quotes.length
+      ? `${quotes.join("\n")}\n\nSource: ${marketData.source}. ${marketData.isEstimate ? marketData.reason : marketData.isCached ? "Cached official records (not a live refresh)." : "Retrieved from the official feed."}`
+      : `No ${marketData.isEstimate ? "planning estimates" : "verified market prices"} are available for ${context.district || "Karnataka"} right now. ${marketData.reason}`;
 
     if (isKannada) {
       return {
-        text: `🛒 **ಕರ್ನಾಟಕ ಮಾರುಕಟ್ಟೆ ದರಗಳ ಮಾದರಿ (ಡೆಮೋ; ನೈಜ ಧಾರಣೆಗಳಲ್ಲ):**\n\n` +
-              `• **ರಾಗಿ (Ragi):** ${quoteRagi ? `${quoteRagi.market} ನಲ್ಲಿ ಮಾದರಿ ದರ ₹${quoteRagi.modalPrice.toLocaleString("en-IN")}/ಕ್ವಿಂ (ಕನಿಷ್ಠ ₹${quoteRagi.minPrice} - ಗರಿಷ್ಠ ₹${quoteRagi.maxPrice})` : "₹3,800/ಕ್ವಿಂ"}\n` +
-              `• **ಮುಸುಕಿನ ಜೋಳ (Maize):** ${quoteMaize ? `${quoteMaize.market} ನಲ್ಲಿ ಮಾದರಿ ದರ ₹${quoteMaize.modalPrice.toLocaleString("en-IN")}/ಕ್ವಿಂ (ಕನಿಷ್ಠ ₹${quoteMaize.minPrice} - ಗರಿಷ್ಠ ₹${quoteMaize.maxPrice})` : "₹2,240/ಕ್ವಿಂ"}\n` +
-              `• **ತೊಗರಿ (Tur/Pigeon Pea):** ${quoteTur ? `${quoteTur.market} ನಲ್ಲಿ ಮಾದರಿ ದರ ₹${quoteTur.modalPrice.toLocaleString("en-IN")}/ಕ್ವಿಂ (ಕನಿಷ್ಠ ₹${quoteTur.minPrice} - ಗರಿಷ್ಠ ₹${quoteTur.maxPrice})` : "₹7,400/ಕ್ವಿಂ"}\n` +
-              `• **ಟೊಮೆಟೊ (Tomato):** ${quoteTomato ? `${quoteTomato.market} ನಲ್ಲಿ ಮಾದರಿ ದರ ₹${quoteTomato.modalPrice.toLocaleString("en-IN")}/ಕ್ವಿಂ` : "₹1,800/ಕ್ವಿಂ"}\n\n` +
-              `📍 ಇವು ಡೆಮೋ ಮೌಲ್ಯಗಳು ಮಾತ್ರ. ನೈಜ ದರಗಳಿಗಾಗಿ 'ಮಾರುಕಟ್ಟೆ ಧಾರಣೆ' ಪುಟದಲ್ಲಿನ ದಿನಾಂಕ ಮತ್ತು ಡೇಟಾ ಮೂಲವನ್ನು ಪರಿಶೀಲಿಸಿ.`,
+        text: `🛒 **ಬೆಳೆ ಬೆಲೆ ಮಾಹಿತಿ:**\n\n${recordsText}\n\n` +
+              `${marketData.isEstimate ? "📍 ಮಾರಾಟಕ್ಕೂ ಮೊದಲು ಸ್ಥಳೀಯ APMC ಯಲ್ಲಿ ಇಂದಿನ ದರ ಪರಿಶೀಲಿಸಿ." : "📍 ಮಾರಾಟದ ನಿರ್ಧಾರಕ್ಕೂ ಮೊದಲು ಮಂಡಿ ಮತ್ತು ದಿನಾಂಕವನ್ನು ಪರಿಶೀಲಿಸಿ."}`,
         mode: "knowledge-engine"
       };
     }
     return {
-      text: `🛒 **Illustrative Karnataka mandi values (demo only; not live quotes, per quintal):**\n\n` +
-            `• **Ragi:** ${quoteRagi ? `${quoteRagi.market} modal price is ₹${quoteRagi.modalPrice.toLocaleString("en-IN")}/q (Range: ₹${quoteRagi.minPrice} – ₹${quoteRagi.maxPrice})` : "₹3,800/q"}\n` +
-            `• **Maize:** ${quoteMaize ? `${quoteMaize.market} modal price is ₹${quoteMaize.modalPrice.toLocaleString("en-IN")}/q (Range: ₹${quoteMaize.minPrice} – ₹${quoteMaize.maxPrice})` : "₹2,240/q"}\n` +
-            `• **Tur (Pigeon Pea):** ${quoteTur ? `${quoteTur.market} modal price is ₹${quoteTur.modalPrice.toLocaleString("en-IN")}/q (Range: ₹${quoteTur.minPrice} – ₹${quoteTur.maxPrice})` : "₹7,400/q"}\n` +
-            `• **Tomato:** ${quoteTomato ? `${quoteTomato.market} modal price is ₹${quoteTomato.modalPrice.toLocaleString("en-IN")}/q` : "₹1,800/q"}\n\n` +
-            `⚠️ These are demonstration values, not verified or live prices. Check the date and source shown on the **Market Prices** page before making decisions.`,
+      text: `🛒 **${marketData.isEstimate ? "Crop price planning references" : `Market prices for ${context.district || "Karnataka"}`}:**\n\n${recordsText}\n\n` +
+            `${marketData.isEstimate ? "Check today's rate with your local APMC before making a selling decision." : "Check the market and date before making a selling decision."}`,
       mode: "knowledge-engine"
     };
   }
@@ -186,21 +193,19 @@ export async function answerAssistant(message, context = {}) {
       if (isKannada) {
         return {
           text: `🐛 **ಮುಸುಕಿನ ಜೋಳದ ಸೈನಿಕ ಹುಳು (Fall Armyworm) ನಿಯಂತ್ರಣ ಕ್ರಮಗಳು:**\n\n` +
-                `1. **ಆರಂಭಿಕ ಹಂತ (ಬಿತ್ತನೆಯಾದ 10-20 ದಿನ):** ಬೇವಿನ ಎಣ್ಣೆ (Azadirachtin 1500 ppm) 2-3 ಮಿ.ಲೀ. ಪ್ರತಿ ಲೀಟರ್ ನೀರಿಗೆ ಬೆರೆಸಿ ಸುಳಿಗೆ ಬೀಳುವಂತೆ ಸಿಂಪಡಿಸಿ.\n` +
-                `2. **ಬಲೆಗಳು:** ಎಕರೆಗೆ 4-5 ಮೋಹಕ ಬಲೆಗಳನ್ನು (Pheromone traps) ಅಳವಡಿಸಿ.\n` +
-                `3. **ಜೈವಿಕ ನಿಯಂತ್ರಣ:** ಟ್ರೈಕೋಗ್ರಾಮ ಪರಾವಲಂಬಿ ಕಾರ್ಡ್‌ಗಳನ್ನು ಬಳಸಿ.\n` +
-                `4. **ತೀವ್ರ ಬಾಧೆ ಇದ್ದಲ್ಲಿ:** ತಜ್ಞರ ಸಲಹೆಯಂತೆ ಶಿಫಾರಸು ಮಾಡಿದ ಕೀಟನಾಶಕ (ಉದಾ: Emamectin Benzoate 5% SG @ 0.4 g/L) ಸಿಂಪಡಿಸಿ.\n\n` +
-                `⚠️ *ಯಾವಾಗಲೂ ಸುರಕ್ಷತಾ ಮುನ್ನೆಚ್ಚರಿಕೆಗಳನ್ನು ವಹಿಸಿ ಮತ್ತು ಸ್ಥಳೀಯ ರೈತ ಸಂಪರ್ಕ ಕೇಂದ್ರವನ್ನು (RSK) ಸಂಪರ್ಕಿಸಿ.*`,
+                `1. **ಹೊಲ ಪರಿಶೀಲನೆ:** ಗಿಡಗಳ ಸುಳಿಯಲ್ಲಿನ ಹಾನಿ ಮತ್ತು ಹುಳುಗಳ ಲಕ್ಷಣಗಳನ್ನು ನಿಯಮಿತವಾಗಿ ಗಮನಿಸಿ.\n` +
+                `2. **ಸಮಗ್ರ ನಿರ್ವಹಣೆ:** ಸೋಂಕಿತ ಭಾಗಗಳನ್ನು ಸುರಕ್ಷಿತವಾಗಿ ತೆಗೆದುಹಾಕಿ; ನಿಮ್ಮ ಬೆಳೆಗೆ ಸೂಕ್ತವಾದ ಬಲೆ ಅಥವಾ ಜೈವಿಕ ನಿಯಂತ್ರಣದ ಬಗ್ಗೆ RSK/KVK ಸಲಹೆ ಪಡೆಯಿರಿ.\n` +
+                `3. **ತೀವ್ರ ಬಾಧೆ ಇದ್ದಲ್ಲಿ:** ಕೀಟವನ್ನು ತಜ್ಞರಿಂದ ಗುರುತಿಸಿ, ನಿಮ್ಮ ಪ್ರದೇಶದಲ್ಲಿ ನೋಂದಾಯಿತ ಚಿಕಿತ್ಸೆಯನ್ನಷ್ಟೇ ಉತ್ಪನ್ನದ ಲೇಬಲ್ ಪ್ರಕಾರ ಬಳಸಿ.\n\n` +
+                `⚠️ *ಲೇಬಲ್ ಸೂಚನೆಗಳನ್ನು ಪಾಲಿಸಿ; ಔಷಧಿ ಮಿಶ್ರಣ ಅಥವಾ ಪ್ರಮಾಣವನ್ನು ಊಹಿಸಬೇಡಿ. ಸ್ಥಳೀಯ ರೈತ ಸಂಪರ್ಕ ಕೇಂದ್ರವನ್ನು (RSK) ಸಂಪರ್ಕಿಸಿ.*`,
           mode: "knowledge-engine"
         };
       }
       return {
         text: `🐛 **Maize Fall Armyworm (FAW) Integrated Pest Management:**\n\n` +
-              `1. **Early Stage (10–20 DAS):** Spray organic Neem formulation (Azadirachtin 1500 ppm @ 2-3 ml/L) directing the spray into the plant whorl.\n` +
-              `2. **Monitoring:** Install 4–5 FAW pheromone traps per acre for early detection.\n` +
-              `3. **Biocontrol:** Release egg parasitoid *Trichogramma pretiosum* @ 50,000/acre.\n` +
-              `4. **Threshold Chemical Intervention:** If whorl damage exceeds 10%, apply Emamectin Benzoate 5% SG @ 0.4 g/L or Chlorantraniliprole 18.5% SC @ 0.3 ml/L into whorls.\n\n` +
-              `⚠️ *Always adhere to registered label doses and consult your local Krishi Vigyan Kendra (KVK).*`,
+              `1. **Field scouting:** Regularly inspect the plant whorls for feeding damage and larvae.\n` +
+              `2. **Integrated management:** Remove and safely dispose of heavily affected plant parts; ask your RSK/KVK about crop-appropriate traps and biological controls.\n` +
+              `3. **Severe infestation:** Have the pest identified by an agricultural expert and use only a treatment registered for your crop and region, exactly as its label directs.\n\n` +
+              `⚠️ *Do not guess or mix pesticide doses. Follow the product label and consult your local Krishi Vigyan Kendra (KVK).*`,
         mode: "knowledge-engine"
       };
     }
@@ -209,17 +214,17 @@ export async function answerAssistant(message, context = {}) {
       if (isKannada) {
         return {
           text: `🌾 **ಭತ್ತದ ಬೆಳೆಯ ಕಾಂಡ ಕೊರೆಯುವ ಹುಳು ಮತ್ತು ಬೆಂಕಿ ರೋಗ (Blast) ನಿರ್ವಹಣೆ:**\n\n` +
-                `1. **ಕಾಂಡ ಕೊರೆಯುವ ಹುಳು (Stem Borer):** ಎಕರೆಗೆ 4-5 ಲಿಂಗಾಕರ್ಷಕ ಬಲೆ ಇಡಿ. ಟ್ರೈಕೋಗ್ರಾಮಾ ಜಪಾನಿಕಂ ಪರಾವಲಂಬಿ ಬಳಸಿ. ತೀವ್ರವಿದ್ದಾಗ ಕ್ಲೋರಂಟ್ರಾನಿಲಿಪ್ರೋಲ್ 0.4g/L ಬಳಸಿ.\n` +
-                `2. **ಬೆಂಕಿ ರೋಗ (Blast Disease):** ಸಾರಜನಕ (ಯೂರಿಯಾ) ಗೊಬ್ಬರವನ್ನು ಅತಿಯಾಗಿ ಬಳಸಬೇಡಿ. ಸೂಡೊಮೊನಾಸ್ ಫ್ಲೋರೊಸೆನ್ಸ್ 5g/L ಸಿಂಪಡಿಸಿ. ತೀವ್ರವಿದ್ದಾಗ ಟ್ರೈಸೈಕ್ಲಾಜೋಲ್ 75 WP (0.6 g/L) ಸಿಂಪಡಿಸಿ.\n` +
-                `3. ಹೊಲದಲ್ಲಿ ನೀರು ಬಸಿದು ಹೋಗುವಂತೆ ನೋಡಿಕೊಳ್ಳಿ.`,
+                `1. **ಕಾಂಡ ಕೊರೆಯುವ ಹುಳು:** ಹೊಲವನ್ನು ನಿಯಮಿತವಾಗಿ ಪರಿಶೀಲಿಸಿ; ಬೆಳೆಗೆ ಸೂಕ್ತವಾದ ಬಲೆ ಅಥವಾ ಜೈವಿಕ ನಿಯಂತ್ರಣದ ಬಗ್ಗೆ RSK/KVK ಸಲಹೆ ಪಡೆಯಿರಿ.\n` +
+                `2. **ಬೆಂಕಿ ರೋಗದ ಲಕ್ಷಣಗಳು:** ಸೋಂಕಿತ ಸಸ್ಯ ಭಾಗಗಳನ್ನು ಗುರುತಿಸಿ, ಹೊಲದಲ್ಲಿ ನೀರು ಬಸಿದು ಹೋಗುವಂತೆ ನೋಡಿಕೊಳ್ಳಿ ಮತ್ತು ರೋಗದ ದೃಢೀಕರಣಕ್ಕಾಗಿ ಕೃಷಿ ತಜ್ಞರನ್ನು ಸಂಪರ್ಕಿಸಿ.\n` +
+                `3. ಯಾವುದೇ ಚಿಕಿತ್ಸೆ ಬಳಸುವ ಮೊದಲು ಅದು ಭತ್ತ ಮತ್ತು ನಿಮ್ಮ ಪ್ರದೇಶಕ್ಕೆ ನೋಂದಾಯಿತವೇ ಎಂದು ಪರಿಶೀಲಿಸಿ; ಉತ್ಪನ್ನದ ಲೇಬಲ್ ಪಾಲಿಸಿ.`,
           mode: "knowledge-engine"
         };
       }
       return {
         text: `🌾 **Paddy Stem Borer & Blast Disease Management:**\n\n` +
-              `1. **Yellow Stem Borer:** Install 4–5 pheromone traps/acre. Release *Trichogramma japonicum*. If dead-hearts exceed 10%, apply Cartap Hydrochloride 50% SP @ 2 g/L or Chlorantraniliprole 18.5% SC @ 0.3 ml/L.\n` +
-              `2. **Blast Disease (*Magnaporthe grisea*):** Avoid excessive split application of Nitrogen (Urea). Spray *Pseudomonas fluorescens* @ 5 g/L preventively, or Tricyclazole 75% WP @ 0.6 g/L upon early spindle lesion detection.\n` +
-              `3. Maintain proper field drainage and destroy infected stubbles after harvest.`,
+              `1. **Stem borer:** Scout fields regularly and ask your RSK/KVK about crop-appropriate traps or biological controls.\n` +
+              `2. **Possible blast symptoms:** Confirm the diagnosis with an agricultural expert, avoid excessive nitrogen, and maintain proper field drainage.\n` +
+              `3. Before any treatment, verify that it is registered for paddy in your region and follow its product label exactly.`,
         mode: "knowledge-engine"
       };
     }
@@ -227,19 +232,19 @@ export async function answerAssistant(message, context = {}) {
     if (isKannada) {
       return {
         text: `🛡️ **ಸಮಗ್ರ ಕೀಟ ಮತ್ತು ರೋಗ ನಿರ್ವಹಣೆ (IPM) ಸೂತ್ರಗಳು:**\n\n` +
-              `1. **ಮುನ್ನೆಚ್ಚರಿಕೆ:** ಬೀಜೋಪಚಾರ (ಟ್ರೈಕೋಡರ್ಮಾ ಅಥವಾ ಸೂಡೊಮೊನಾಸ್ ಬಳಸಿ).\n` +
-              `2. **ಜೈವಿಕ ರಕ್ಷಣೆ:** ಎಕರೆಗೆ 5-8 ಹಳದಿ/ನೀಲಿ ಜಿಗುಟು ಬಲೆಗಳು ಮತ್ತು ಬೇವಿನ ಎಣ್ಣೆ (Azadirachtin 1500 ppm @ 3 ml/L) ಸಿಂಪಡಣೆ.\n` +
-              `3. **ಹೊಲದ ಸ್ವಚ್ಛತೆ:** ಕಳೆ ನಿರ್ಮೂಲನೆ ಮತ್ತು ಸೋಂಕಿತ ಸಸ್ಯ ಭಾಗಗಳ ನಾಶ.\n` +
-              `4. ನಿರ್ದಿಷ್ಟ ಬೆಳೆಯ ಕೀಟದ ಲಕ್ಷಣ ತಿಳಿಸಿ (ಉದಾ: 'ಮುಸುಕಿನ ಜೋಳ', 'ರಾಗಿ', 'ತೊಗರಿ', 'ಟೊಮೆಟೊ') ಹೆಚ್ಚಿನ ವಿವರ ನೀಡುತ್ತೇನೆ.`,
+              `1. **ಹೊಲ ಪರಿಶೀಲನೆ:** ಕೀಟ ಅಥವಾ ರೋಗದ ಲಕ್ಷಣಗಳನ್ನು ದಾಖಲಿಸಿ; ಸಾಧ್ಯವಾದರೆ ಸ್ಪಷ್ಟ ಚಿತ್ರ ತೆಗೆದುಕೊಳ್ಳಿ.\n` +
+              `2. **ಸಮಗ್ರ ನಿರ್ವಹಣೆ:** ಹೊಲವನ್ನು ಸ್ವಚ್ಛವಾಗಿಡಿ ಮತ್ತು ಬೆಳೆ/ಕೀಟಕ್ಕೆ ಸೂಕ್ತವಾದ ಬಲೆ ಅಥವಾ ಜೈವಿಕ ನಿಯಂತ್ರಣದ ಬಗ್ಗೆ ಸ್ಥಳೀಯ ತಜ್ಞರನ್ನು ಕೇಳಿ.\n` +
+              `3. **ಚಿಕಿತ್ಸೆ:** ಉತ್ಪನ್ನದ ಲೇಬಲ್ ಮತ್ತು RSK/KVK ಸಲಹೆಯಿಲ್ಲದೆ ಕೀಟನಾಶಕ ಅಥವಾ ಮಿಶ್ರಣ ಬಳಸಬೇಡಿ.\n` +
+              `4. ಬೆಳೆಯ ಹೆಸರು ಮತ್ತು ಕಾಣುವ ಲಕ್ಷಣಗಳನ್ನು ತಿಳಿಸಿ; ಮುಂದಿನ ಸುರಕ್ಷಿತ ಕ್ರಮಗಳನ್ನು ಸೂಚಿಸುತ್ತೇನೆ.`,
         mode: "knowledge-engine"
       };
     }
     return {
       text: `🛡️ **Integrated Pest & Disease Management (IPM) Guidelines:**\n\n` +
-      `1. **Seed Treatment:** Treat seeds with *Trichoderma viride* (4 g/kg) or *Pseudomonas fluorescens* (10 g/kg) to protect seedlings from soil-borne damping off.\n` +
-      `2. **Eco-friendly Traps:** Install yellow sticky traps (aphids, whiteflies) and crop-specific pheromone traps.\n` +
-      `3. **Botanical Sprays:** Use 5% Neem Seed Kernel Extract (NSKE) or Azadirachtin 1500 ppm @ 3 ml/L as early preventive intervention.\n` +
-      `4. Tell me your specific crop (e.g. *Maize, Ragi, Paddy, Tur, Tomato*) for targeted diagnosis and chemical/biological recommendations!`,
+      `1. **Field scouting:** Record visible symptoms and, if possible, take a clear photo for diagnosis.\n` +
+      `2. **Integrated management:** Maintain field sanitation and ask your local RSK/KVK which crop-appropriate traps or biological controls are suitable.\n` +
+      `3. **Treatment:** Do not guess pesticide doses or mixes. Use only a product registered for the crop and region, following its label and expert advice.\n` +
+      `4. Tell me the crop and symptoms so I can suggest safe next steps.`,
       mode: "knowledge-engine"
     };
   }
@@ -249,20 +254,20 @@ export async function answerAssistant(message, context = {}) {
     if (isKannada) {
       return {
         text: `🌱 **${district} ಭಾಗಕ್ಕೆ ಸೂಕ್ತ ಬೆಳೆಗಳ ಶಿಫಾರಸು (ಮಣ್ಣು: ${soils}, ನೀರು: ${water}):**\n\n` +
-              `1. **ರಾಗಿ (Ragi - GPU-28, ML-365):** ಕಡಿಮೆ ನೀರಿನಲ್ಲೂ ಅತ್ಯುತ್ತಮವಾಗಿ ಬೆಳೆಯುವ ಪೌಷ್ಟಿಕ ಬೆಳೆ. ಕೆಂಪು ಮತ್ತು ಗೋಡು ಮಣ್ಣಿಗೆ ಸೂಕ್ತ. ಎಕರೆಗೆ ಅಂದಾಜು ₹24,000+ ನಿವ್ವಳ ಲಾಭ.\n` +
-              `2. **ಮುಸುಕಿನ ಜೋಳ (Maize):** ಮಧ್ಯಮ ನೀರಿನ ಲಭ್ಯತೆ ಇದ್ದರೆ ಹೆಚ್ಚಿನ ಇಳುವರಿ (20-25 ಕ್ವಿಂ/ಎಕರೆ) ನೀಡುವ ಬೆಳೆ.\n` +
+              `1. **ರಾಗಿ (Ragi - GPU-28, ML-365):** ಕಡಿಮೆ ನೀರಿನಲ್ಲೂ ಬೆಳೆಯಬಲ್ಲ ಪೌಷ್ಟಿಕ ಬೆಳೆ. ನಿಮ್ಮ ಮಣ್ಣು ಮತ್ತು ಸ್ಥಳೀಯ ಪರಿಸ್ಥಿತಿಗೆ ಹೊಂದಿಕೆಯನ್ನು ಪರಿಶೀಲಿಸಿ.\n` +
+              `2. **ಮುಸುಕಿನ ಜೋಳ (Maize):** ಮಧ್ಯಮ ನೀರಿನ ಲಭ್ಯತೆ ಇದ್ದರೆ ಪರಿಗಣಿಸಬಹುದಾದ ಬೆಳೆ; ನಿಜವಾದ ಇಳುವರಿ ಸ್ಥಳೀಯ ಪರಿಸ್ಥಿತಿಗಳ ಮೇಲೆ ಅವಲಂಬಿತ.\n` +
               `3. **ಕಡಲೆಕಾಯಿ (Groundnut):** ಎಣ್ಣೆಕಾಳು ಬೆಳೆಯಾಗಿದ್ದು ದ್ವಿದಳ ಧಾನ್ಯದಂತೆ ಮಣ್ಣಿನ ಫಲವತ್ತತೆ ಹೆಚ್ಚಿಸುತ್ತದೆ. ಮರಳು-ಗೋಡು ಮಣ್ಣಿಗೆ ಅತ್ಯುತ್ತಮ.\n` +
-              `4. **ತೊಗರಿ / ದ್ವಿದಳ ಧಾನ್ಯಗಳು:** ಕಡಿಮೆ ನೀರಿನಲ್ಲಿ ಉತ್ತಮ ಮಾರುಕಟ್ಟೆ ಬೆಲೆ (~₹7,500/ಕ್ವಿಂ) ನೀಡುವ ಬೆಳೆ.\n\n` +
+              `4. **ತೊಗರಿ / ದ್ವಿದಳ ಧಾನ್ಯಗಳು:** ಕಡಿಮೆ ನೀರಿನ ಅಗತ್ಯವಿರುವ ಆಯ್ಕೆಗಳು; ಮಾರಾಟದ ಮೊದಲು ಇಂದಿನ APMC ದರ ಪರಿಶೀಲಿಸಿ.\n\n` +
               `👉 ಸಂಪೂರ್ಣ ವೈಜ್ಞಾನಿಕ ಸ್ಕೋರ್ ಮತ್ತು ಬೆಳೆ ಹೋಲಿಕೆಗಾಗಿ 'ಬೆಳೆ ಯೋಜನೆ' (Crop Planner) ಪುಟಕ್ಕೆ ಭೇಟಿ ನೀಡಿ!`,
         mode: "knowledge-engine"
       };
     }
     return {
       text: `🌱 **Top Recommended Crops for ${district} (${soils}, ${water} water availability):**\n\n` +
-            `1. **Ragi (Finger Millet - GPU-28, ML-365):** Highly resilient, drought-tolerant, and thrives in red/loamy soils. Delivers consistent ~₹24,500/acre net profit.\n` +
-            `2. **Maize (High-Yield Hybrids):** Excellent choice where moderate irrigation and good drainage are present (potential 22–25 q/acre).\n` +
-            `3. **Groundnut (TMV-2, JL-24):** Superior oilseed option that enriches soil nitrogen while fetching strong market prices (~₹6,200/q).\n` +
-            `4. **Tur (Pigeon Pea) / Pulses:** High-value pulse option demanding minimal irrigation with strong market demand (~₹7,400/q).\n\n` +
+            `1. **Ragi (Finger Millet - GPU-28, ML-365):** A drought-tolerant option for suitable red/loamy soils. Yield and returns depend on local conditions and current selling prices.\n` +
+            `2. **Maize (High-Yield Hybrids):** Consider where moderate irrigation and good drainage are available; actual yield varies by farm.\n` +
+            `3. **Groundnut (TMV-2, JL-24):** An oilseed option for suitable soils; confirm local suitability and today's APMC price.\n` +
+            `4. **Tur (Pigeon Pea) / Pulses:** Lower-water options to consider; check current local prices before making a selling decision.\n\n` +
             `👉 Navigate to **Crop Planner** in your sidebar to see real-time suitability percentages and compare crops side by side!`,
       mode: "knowledge-engine"
     };

@@ -9,8 +9,8 @@ import { crops } from "../data/crops.js";
 import { locations } from "../data/locations.js";
 import { requireAuth } from "../middleware/auth.js";
 import { Activity, ChatHistory, CropPlan, Farmer, Notification } from "../models/index.js";
-import { answerAssistant } from "../services/assistant.js";
-import { getMarketPrices, getCropTrends } from "../services/market.js";
+import { answerAssistant, getAssistantAIStatus } from "../services/assistant.js";
+import { getMarketPrices } from "../services/market.js";
 import { recommend } from "../services/recommendations.js";
 import { getWeather } from "../services/weather.js";
 import {
@@ -570,8 +570,9 @@ router.get("/locations/taluks/:talukId/soils", (req, res) => {
 
 router.get("/crops", (_req, res) =>
   res.json({
-    crops: crops.map(({ name, soils: soilTypes, water, duration, season, yieldPerAcre, costPerAcre, price, risk }) => ({
-      name, soils: soilTypes, water, duration, season, yieldPerAcre, costPerAcre, priceAssumptionPerQuintal: price, risk
+    crops: crops.map(({ name, soils: soilTypes, water, duration, season, sowMonths, yieldPerAcre, costPerAcre, price, risk, note }) => ({
+      name, soils: soilTypes, water, duration, season, sowMonths, yieldPerAcre, costPerAcre,
+      priceAssumptionPerQuintal: price, risk, note, region: "Karnataka"
     }))
   })
 );
@@ -680,7 +681,8 @@ router.get("/market/prices", async (req, res, next) => {
       crop: req.query.crop,
       district: req.query.district,
       market: req.query.market,
-      category: req.query.category
+      category: req.query.category,
+      refresh: req.query.refresh
     }));
   } catch (error) { next(error); }
 });
@@ -692,7 +694,8 @@ router.get("/market/trends", async (req, res, next) => {
       crop,
       district: req.query.district,
       market: req.query.market,
-      category: req.query.category
+      category: req.query.category,
+      refresh: req.query.refresh
     });
     const selectedCrop = crop || (result.prices[0]?.crop || "Ragi");
     const cropQuery = String(selectedCrop).toLowerCase();
@@ -700,10 +703,11 @@ router.get("/market/trends", async (req, res, next) => {
       const name = String(price.crop).toLowerCase();
       return name.includes(cropQuery) || cropQuery.includes(name);
     });
-    const trends = result.isLive
-      ? matchingPrices.map(({ date, modalPrice, market }) => ({ date, modalPrice, market }))
-      : getCropTrends(selectedCrop);
-    const comparison = matchingPrices.sort((a, b) => b.modalPrice - a.modalPrice);
+    const trends = result.isEstimate ? [] : [...matchingPrices]
+      .filter((price) => price.date)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(({ date, modalPrice, market }) => ({ date, modalPrice, market }));
+    const comparison = result.isEstimate ? [] : [...matchingPrices].sort((a, b) => b.modalPrice - a.modalPrice);
     res.json({ ...result, trends, comparison, selectedCrop });
   } catch (error) { next(error); }
 });
@@ -711,8 +715,8 @@ router.get("/market/trends", async (req, res, next) => {
 router.get("/market/compare", async (req, res, next) => {
   try {
     const crop = req.query.crop || "Ragi";
-    const result = await getMarketPrices({ crop });
-    const comparison = result.prices.sort((a, b) => b.modalPrice - a.modalPrice);
+    const result = await getMarketPrices({ crop, refresh: req.query.refresh });
+    const comparison = result.isEstimate ? [] : result.prices.sort((a, b) => b.modalPrice - a.modalPrice);
     res.json({
       crop,
       comparison,
@@ -833,6 +837,10 @@ router.delete("/plans/:id", requireAuth, async (req, res, next) => {
 // 7. ASSISTANT
 // ==========================================
 
+router.get("/assistant/status", requireAuth, (_req, res) => {
+  res.json(getAssistantAIStatus());
+});
+
 router.get("/assistant/history", requireAuth, async (req, res, next) => {
   try {
     if (demoMode()) return res.json({ messages: demoChats.get(req.farmerId) || [] });
@@ -859,6 +867,9 @@ router.post("/assistant/chat", requireAuth, async (req, res, next) => {
       return res.status(400).json({ error: "Enter a message of up to 1,000 characters." });
     }
     const farmer = await farmerLookup(req.farmerId);
+    const savedMessages = demoMode()
+      ? demoChats.get(req.farmerId) || []
+      : (await ChatHistory.findOne({ farmer: req.farmerId }))?.messages || [];
     const context = {
       district: farmer?.district,
       taluk: farmer?.taluk,
@@ -867,7 +878,8 @@ router.post("/assistant/chat", requireAuth, async (req, res, next) => {
       season: req.body.season,
       language: req.body.language || farmer?.language || "en",
       weather: req.body.weather,
-      recommendations: req.body.recommendations
+      recommendations: req.body.recommendations,
+      chatHistory: savedMessages.slice(-10).map(({ role, content }) => ({ role, content }))
     };
     const answer = await answerAssistant(message, context);
     const additions = [{ role: "user", content: message }, { role: "assistant", content: answer.text }];

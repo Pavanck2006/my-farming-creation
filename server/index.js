@@ -2,6 +2,7 @@ import "dotenv/config";
 import cors from "cors";
 import express from "express";
 import rateLimit from "express-rate-limit";
+import mongoose from "mongoose";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -55,7 +56,20 @@ app.use((req, res, next) => {
 });
 
 app.use("/api/auth", rateLimit({ windowMs: 15 * 60 * 1000, limit: 120, standardHeaders: true, legacyHeaders: false }));
-app.get("/api/health", (_req, res) => res.json({ status: "ok", database: process.env.MONGODB_URI ? "configured" : "demo-mode", sms: process.env.TWILIO_VERIFY_SERVICE_SID ? "configured" : "local-demo" }));
+const healthCheck = (_req, res) => {
+  const databaseStates = ["disconnected", "connected", "connecting", "disconnecting"];
+  const database = process.env.MONGODB_URI
+    ? databaseStates[mongoose.connection.readyState] || "unknown"
+    : "demo-mode";
+
+  res.json({
+    status: "ok",
+    database,
+    sms: process.env.TWILIO_VERIFY_SERVICE_SID ? "configured" : "local-demo"
+  });
+};
+app.get("/api", healthCheck);
+app.get("/api/health", healthCheck);
 app.use("/api", api);
 
 app.use((error, _req, res, _next) => {

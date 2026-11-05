@@ -153,6 +153,26 @@ JWT_SECRET=cropwise-hackathon-secure-prototype-secret-2026
 ```
 - If `MONGODB_URI` is left empty, the application automatically runs in an in-memory demo mode where all models (Farmer, Notifications, Activities, Crop Plans) are preserved during the server run.
 - To use persistent MongoDB, set `MONGODB_URI=mongodb://127.0.0.1:27017/cropwise` or your MongoDB Atlas URI.
+- Market planning prices use the crop planner's existing reference-price assumptions and display an illustrative range. They are not live, historical, or district-specific mandi quotes; no market API key is required. Farmers should confirm current rates with their local APMC before selling.
+- The built-in chat provides English and Kannada guidance. To enable model-powered replies in the farmer's language, configure either a local Ollama model (no API key) or Gemini in `server/.env`. The model is prompted to use the language of each message and can use recent chat context.
+
+#### Optional multilingual AI setup
+
+**Local Ollama (no API key):**
+1. Install and start [Ollama](https://ollama.com/), then download a multilingual model, for example: `ollama pull qwen2.5:7b`.
+2. Add these values to `server/.env`:
+   ```env
+   AI_API_URL=http://127.0.0.1:11434/v1/chat/completions
+   AI_API_KEY=
+   AI_MODEL=qwen2.5:7b
+   ```
+3. Restart the backend. The assistant status on the chat page will show that multilingual AI is configured.
+
+**Gemini API:**
+1. Create a Gemini API key with Google AI Studio.
+2. Set `GEMINI_API_KEY=your-key` in `server/.env` and restart the backend. Keep the key server-side; never add it to frontend environment variables or commit it.
+
+Without a configured AI model, the app continues to work with its built-in English/Kannada crop guidance. Model language coverage and advice quality depend on the chosen model; verify important agronomic recommendations with a local expert.
 
 ### 4. Running the Application
 From the `cropwise` root directory, run both frontend and backend concurrently:
