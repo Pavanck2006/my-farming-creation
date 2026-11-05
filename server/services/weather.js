@@ -170,15 +170,15 @@ export async function getWeather(location) {
       totalWeeklyRain > 25
         ? "Heavy rain expected this week. Delay pesticide application and check field drainage."
         : totalWeeklyRain > 5
-        ? "Moderate rain showers forecasted. Suitable for land preparation and sowing."
-        : "Dry conditions expected. Ensure adequate irrigation planning for standing crops.";
+          ? "Moderate rain showers forecasted. Suitable for land preparation and sowing."
+          : "Dry conditions expected. Ensure adequate irrigation planning for standing crops.";
 
     const tempTrend =
       tempChange > 2
         ? `Warming trend: temperatures rising by ~${tempChange}°C over the next 24-48 hours.`
         : tempChange < -2
-        ? `Cooling trend: temperatures dropping by ~${Math.abs(tempChange)}°C.`
-        : "Stable temperatures expected over the next few days.";
+          ? `Cooling trend: temperatures dropping by ~${Math.abs(tempChange)}°C.`
+          : "Stable temperatures expected over the next few days.";
 
     return {
       available: true,

@@ -1,11 +1,11 @@
-import { RefreshCw, Wind,  useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowDownRight, ArrowRight, ArrowUpRight, Bell, CalendarDays, Check, CheckCheck,
   ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock, CloudSun, Droplets,
   Flower2, History, Home, Image, Leaf, LogOut, Menu, MessageCircle, Moon,
   Plus, Search, Settings, ShieldCheck, Sparkles, Sun, Trash2, TrendingUp,
-  Upload, User, Wheat, X
+  RefreshCw, Upload, User, Wheat, Wind, X
 } from "lucide-react";
 import {
   Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis
@@ -2240,6 +2240,7 @@ function MarketPage() {
       });
       setMarketData(data);
     } catch (err) {
+      setMarketData(null);
       setError(errorMessage(err));
     } finally {
       setLoading(false);
@@ -2257,8 +2258,8 @@ function MarketPage() {
         eyebrow={language === "kn" ? "ಮಾರುಕಟ್ಟೆ ಧಾರಣೆ" : "AGRICULTURAL MARKET WATCH"}
         title={language === "kn" ? "ಕರ್ನಾಟಕ ಮಂಡಿ ದರಗಳು" : "Karnataka Mandi Prices"}
         detail={language === "kn"
-          ? "ಅಧಿಕೃತ ಎಪಿಎಂಸಿ ಮಂಡಿ ದಾಖಲೆಗಳು ಮತ್ತು ನೈಜ ಧಾರಣೆಗಳು. ಮಾರಾಟ ಮಾಡುವ ಮುನ್ನ ದರಗಳನ್ನು ಹೋಲಿಸಿ."
-          : "Verified APMC mandi rates across Karnataka districts. Compare prices across markets before selling."}
+          ? "ಲಭ್ಯವಿದ್ದರೆ ನೈಜ ಮಾರುಕಟ್ಟೆ ದರಗಳನ್ನು ನೋಡಿ; ಡೆಮೋ ಮೌಲ್ಯಗಳನ್ನು ಸ್ಪಷ್ಟವಾಗಿ ಗುರುತಿಸಲಾಗುತ್ತದೆ."
+          : "Compare market prices across Karnataka. Demo values are clearly identified and are never presented as live quotes."}
         action={
           <button
             className="button button-outline"
@@ -2271,19 +2272,19 @@ function MarketPage() {
         }
       />
 
-      {/* Live vs Sample Status Banner */}
+      {/* Live vs demo status banner */}
       {marketData && (
-        <div className={`panel market-status-banner ${marketData.isLive ? "status-live" : "status-verified"}`}>
+        <div className={`panel market-status-banner ${marketData.isLive ? "status-live" : "status-demo"}`}>
           <div className="status-indicator">
-            <span className={`status-dot ${marketData.isLive ? "dot-live" : "dot-verified"}`} />
-            <b>{marketData.statusLabel}</b>
+            <span className={`status-dot ${marketData.isLive ? "dot-live" : "dot-demo"}`} />
+            <b>{marketData.statusLabel || (marketData.isLive ? "Live market feed" : "Demo data — not live market prices")}</b>
           </div>
           <p className="status-desc">
             {marketData.isLive
-              ? "Connected to live Agmarknet / eNAM data stream."
-              : (marketData.sampleNotice || "Showing verified Karnataka APMC benchmark records with authentic market dates.")}
+              ? "Connected to the configured live market feed."
+              : (marketData.sampleNotice || "Showing demonstration values only; these prices are not verified or live.")}
           </p>
-          <small className="muted">Source: {marketData.source} · Updated: {new Date(marketData.fetchedAt).toLocaleString()}</small>
+          <small className="muted">Source: {marketData.source || "Not provided"} · Updated: {marketData.fetchedAt ? new Date(marketData.fetchedAt).toLocaleString() : "Unavailable"}</small>
         </div>
       )}
 
@@ -2400,7 +2401,7 @@ function MarketPage() {
 
       {/* Detailed Mandi Table */}
       {loading ? (
-        <Loading label={language === "kn" ? "ಮಾರುಕಟ್ಟೆ ದರಗಳನ್ನು ಪರಿಶೀಲಿಸಲಾಗುತ್ತಿದೆ…" : "Loading verified mandi price records…"} />
+        <Loading label={language === "kn" ? "ಮಾರುಕಟ್ಟೆ ದರಗಳನ್ನು ಲೋಡ್ ಮಾಡಲಾಗುತ್ತಿದೆ…" : "Loading market price data…"} />
       ) : marketData?.prices?.length ? (
         <div className="panel market-table-panel">
           <div className="table-scroll">
@@ -2435,7 +2436,7 @@ function MarketPage() {
                       <small className="muted"> / quintal</small>
                     </td>
                     <td>{new Date(row.date).toLocaleDateString()}</td>
-                    <td><span className="source-badge">{row.source.split("/")[0].trim()}</span></td>
+                    <td><span className="source-badge">{row.source || marketData.source || "Not provided"}</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -2622,25 +2623,55 @@ function ProtectionPage() {
 // ==========================================
 function AssistantPage() {
   const { farmer, language } = useApp();
-  const [messages, setMessages] = useState([
-    {
-      role: "assistant",
-      content: language === "kn"
-        ? "ನಮಸ್ಕಾರ! ನಿಮ್ಮ ಬೆಳೆ, ನೀರು ಅಥವಾ ಋತುವಿನ ಬಗ್ಗೆ ನಾನು ಹೇಗೆ ಸಹಾಯ ಮಾಡಲಿ? ಇವು ಸಾಮಾನ್ಯ ಮಾರ್ಗದರ್ಶನ ಮಾತ್ರ."
-        : "Hello! I can help you explore crop choices, water needs and planning for your land."
-    }
-  ]);
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError] = useState("");
+  const [clearing, setClearing] = useState(false);
+
+  const defaultGreeting = useMemo(() => ({
+    role: "assistant",
+    content: language === "kn"
+      ? "ನಮಸ್ಕಾರ! ನಾನು ನಿಮ್ಮ 'ನಮ್ಮ ಕೃಷಿ' ಕೃಷಿ ಸಹಾಯಕ. ಬೆಳೆ ಆಯ್ಕೆ, ಇಂದಿನ ಹವಾಮಾನ, ಮಾರುಕಟ್ಟೆ ಮಂಡಿ ದರಗಳು, ಇಳುವರಿ ಮತ್ತು ಲಾಭದ ಲೆಕ್ಕಾಚಾರ ಅಥವಾ ಕೀಟ ರೋಗಗಳ ಬಗ್ಗೆ ನೀವು ಯಾವುದೇ ಪ್ರಶ್ನೆಗಳನ್ನು ಕೇಳಬಹುದು."
+      : "Hello! I am your Namma Krishi agricultural assistant. Ask me about crop selection, weather advisories, mandi market prices, yield & profit calculation, or pest protection.",
+    mode: "knowledge-engine"
+  }), [language]);
+
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    setError("");
+    try {
+      const { data } = await api.get("/assistant/history");
+      if (data.messages?.length) {
+        setMessages(data.messages.map(({ role, content, mode }) => ({ role, content, mode })));
+      } else {
+        setMessages([defaultGreeting]);
+      }
+    } catch (err) {
+      setError(errorMessage(err));
+      setMessages([defaultGreeting]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [defaultGreeting]);
 
   useEffect(() => {
-    api.get("/assistant/history")
-      .then(({ data }) => {
-        if (data.messages?.length) setMessages(data.messages.map(({ role, content }) => ({ role, content })));
-      })
-      .catch((reason) => setError(errorMessage(reason)));
-  }, []);
+    loadHistory();
+  }, [loadHistory]);
+
+  const clearHistory = async () => {
+    if (!window.confirm(language === "kn" ? "ಚಾಟ್ ಇತಿಹಾಸವನ್ನು ಅಳಿಸಲು ನೀವು ಖಚಿತವಾಗಿದ್ದೀರಾ?" : "Are you sure you want to clear your conversation history?")) return;
+    setClearing(true);
+    try {
+      await api.delete("/assistant/history");
+      setMessages([defaultGreeting]);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const send = async (text = input) => {
     const question = text.trim();
@@ -2666,62 +2697,105 @@ function AssistantPage() {
     }
   };
 
+  const suggestionsList = language === "kn" ? [
+    "ನನ್ನ ಮಣ್ಣಿಗೆ ಯಾವ ಬೆಳೆ ಸೂಕ್ತ?",
+    "ಇಂದಿನ ಹವಾಮಾನ ಮತ್ತು ಬಿತ್ತನೆ ಸಲಹೆ ಏನು?",
+    "ರಾಗಿ ಮತ್ತು ಮುಸುಕಿನ ಜೋಳದ ಮಾರುಕಟ್ಟೆ ಬೆಲೆ ಎಷ್ಟು?",
+    "ಬೆಳೆ ಇಳುವರಿ ಮತ್ತು ಲಾಭ ಹೇಗೆ ಲೆಕ್ಕ ಹಾಕಬೇಕು?",
+    "ಮುಸುಕಿನ ಜೋಳದ ಸೈನಿಕ ಹುಳು ನಿಯಂತ್ರಣ ಹೇಗೆ?"
+  ] : [
+    "Which crops suit my soil and water best?",
+    "What is today's weather and sowing advice?",
+    "What are the latest mandi prices for Ragi and Maize?",
+    "How to calculate crop yield & net profit?",
+    "How to protect Maize from Fall Armyworm?"
+  ];
+
   return (
     <>
       <PageTitle
-        eyebrow="NAMMA KRISHI ASSISTANT"
-        title="A helpful voice in your corner."
-        detail="Ask simple questions about crops, water or your season. Answers stay honest about what we know."
-        action={<div className="ai-status"><span /> Assistant ready</div>}
+        eyebrow={language === "kn" ? "ನಮ್ಮ ಕೃಷಿ AI ಸಹಾಯಕ" : "NAMMA KRISHI ASSISTANT"}
+        title={language === "kn" ? "ನಿಮ್ಮ ವಿಶ್ವಾಸಾರ್ಹ ಡಿಜಿಟಲ್ ಕೃಷಿ ಮಿತ್ರ" : "A knowledgeable voice in your corner."}
+        detail={language === "kn"
+          ? "ಬೆಳೆ ಆಯ್ಕೆ, ಹವಾಮಾನ, ಮಾರುಕಟ್ಟೆ ಬೆಲೆಗಳು, ಇಳುವರಿ ಲೆಕ್ಕ ಮತ್ತು ಕೀಟ ನಿರ್ವಹಣೆಯ ಬಗ್ಗೆ ನೈಜ ಮತ್ತು ಪ್ರಾಮಾಣಿಕ ಸಲಹೆ ಪಡೆಯಿರಿ."
+          : "Ask questions on crop selection, weather advisories, mandi prices, yield & profit calculation, or pest protection."}
+        action={
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button
+              type="button"
+              className="button button-outline button-small"
+              onClick={clearHistory}
+              disabled={clearing || messages.length <= 1}
+              title="Clear chat history"
+            >
+              <Clock size={14} /> {language === "kn" ? "ಇತಿಹಾಸ ಅಳಿಸಿ" : "Clear Chat"}
+            </button>
+            <div className="ai-status"><span /> {language === "kn" ? "ಸಹಾಯಕ ಸಿದ್ಧವಾಗಿದೆ" : "Assistant ready"}</div>
+          </div>
+        }
       />
+
       <div className="assistant-page-layout">
         <div className="assistant-conversation">
           <div className="chat-context">
-            <div className="context-icon"><Leaf size={18} /></div>
+            <div className="context-icon"><Leaf size={20} /></div>
             <div>
-              <b>Your farm context</b>
+              <b>{language === "kn" ? "ನಿಮ್ಮ ಹೊಲದ ವಿವರಗಳು" : "Your farm context"}</b>
               <span>
                 {farmer?.district
                   ? `${farmer.village ? `${farmer.village}, ` : ""}${farmer.taluk}, ${farmer.district} · ${farmer.soils?.join(", ") || "soil not set"} · ${farmer.waterAvailability} water`
-                  : "Complete your farm profile for more relevant answers"}
+                  : (language === "kn" ? "ಹೆಚ್ಚು ನಿಖರ ಸಲಹೆಗಾಗಿ ನಿಮ್ಮ ಪ್ರೊಫೈಲ್ ಪೂರ್ಣಗೊಳಿಸಿ" : "Complete your farm profile for tailored answers")}
               </span>
             </div>
-            <Link to="/app/profile" aria-label="Edit farm profile"><Settings size={16} /></Link>
+            <Link to="/app/profile" aria-label="Edit farm profile"><Settings size={18} /></Link>
           </div>
 
-          <div className="chat-messages">
-            {messages.map((message, index) => (
-              <div className={`chat-row ${message.role === "user" ? "chat-user-row" : ""}`} key={`${index}-${message.role}`}>
-                <div className={`chat-avatar ${message.role === "user" ? "chat-user-avatar" : ""}`}>
-                  {message.role === "user" ? (
-                    <FarmerAvatar photoUrl={farmer?.photoUrl} name={farmer?.name} size={28} />
-                  ) : (
-                    <Sparkles size={15} />
-                  )}
-                </div>
-                <div className="chat-bubble-wrap">
-                  <div className={`chat-bubble ${message.role === "user" ? "user-bubble" : ""}`}>
-                    {message.content}
+          {historyLoading ? (
+            <Loading label={language === "kn" ? "ಹಿಂದಿನ ಸಂಭಾಷಣೆಯನ್ನು ಲೋಡ್ ಮಾಡಲಾಗುತ್ತಿದೆ…" : "Loading conversation history…"} />
+          ) : (
+            <div className="chat-messages">
+              {messages.map((message, index) => (
+                <div className={`chat-row ${message.role === "user" ? "chat-user-row" : ""}`} key={`${index}-${message.role}`}>
+                  <div className={`chat-avatar ${message.role === "user" ? "chat-user-avatar" : ""}`}>
+                    {message.role === "user" ? (
+                      <FarmerAvatar photoUrl={farmer?.photoUrl} name={farmer?.name} size={32} />
+                    ) : (
+                      <Sparkles size={18} />
+                    )}
                   </div>
-                  {message.mode && (
-                    <span className="chat-mode">
-                      {message.mode === "ai" ? "AI response · confirm critical actions locally" : "Rule-based assistant"}
-                    </span>
-                  )}
+                  <div className="chat-bubble-wrap">
+                    <div className={`chat-bubble ${message.role === "user" ? "user-bubble" : ""}`}>
+                      {message.content}
+                    </div>
+                    {message.role === "assistant" && (
+                      <span className="chat-mode">
+                        {message.mode === "ai"
+                          ? "🤖 Live AI Response · Verified with Namma Krishi agronomy rules"
+                          : "🌾 Namma Krishi Agricultural Engine"}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-            {busy && (
-              <div className="chat-row">
-                <div className="chat-avatar"><Sparkles size={15} /></div>
-                <div className="chat-bubble typing"><i /><i /><i /></div>
-              </div>
-            )}
-          </div>
+              ))}
+              {busy && (
+                <div className="chat-row">
+                  <div className="chat-avatar"><Sparkles size={18} /></div>
+                  <div className="chat-bubble typing">
+                    <span style={{ fontSize: 13, marginRight: 8 }}>
+                      {language === "kn" ? "ನಮ್ಮ ಕೃಷಿ AI ಉತ್ತರಿಸುತ್ತಿದೆ…" : "Namma Krishi AI is generating advice…"}
+                    </span>
+                    <i /><i /><i />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="chat-suggestions">
-            {suggestions.map((item) => (
-              <button key={item} onClick={() => send(item)}>{item} <ArrowUpRight size={13} /></button>
+            {suggestionsList.map((item) => (
+              <button key={item} onClick={() => send(item)} disabled={busy}>
+                {item} <ArrowUpRight size={14} />
+              </button>
             ))}
           </div>
 
@@ -2730,26 +2804,49 @@ function AssistantPage() {
               value={input}
               onChange={(event) => setInput(event.target.value)}
               maxLength={1000}
-              placeholder="Ask a question about your farm…"
+              placeholder={language === "kn" ? "ಬೆಳೆ, ಬೆಲೆ, ಹವಾಮಾನ, ಲಾಭ ಅಥವಾ ಕೀಟಗಳ ಬಗ್ಗೆ ಪ್ರಶ್ನೆ ಕೇಳಿ…" : "Ask about crop choice, mandi price, weather, profit calculation, or pests…"}
               aria-label="Your question"
+              disabled={busy}
             />
             <button className="button button-primary" disabled={busy || !input.trim()} aria-label="Send message">
-              <ArrowRight size={17} />
+              <ArrowRight size={18} />
             </button>
           </form>
-          {error && <Notice kind="error">{error}</Notice>}
-          <div className="chat-disclaimer">General guidance only · Not a substitute for local agricultural advice.</div>
+
+          {error && (
+            <Notice kind="error">
+              <span>{error}</span>
+              <button
+                type="button"
+                onClick={() => send(input)}
+                className="text-button"
+                style={{ marginLeft: 12, textDecoration: "underline" }}
+              >
+                Retry
+              </button>
+            </Notice>
+          )}
+          <div className="chat-disclaimer">
+            ⚠️ Namma Krishi advisory engine provides reference agronomic estimates. Confirm critical chemical doses and sowing dates with your local Raitha Samparka Kendra (RSK).
+          </div>
         </div>
 
         <aside className="assistant-side">
-          <div className="assistant-side-icon"><Sparkles size={21} /></div>
-          <span className="eyebrow">HERE TO HELP</span>
-          <h3>Small questions are welcome.</h3>
-          <p>Your assistant can explain why a crop appears in your shortlist, compare water needs and suggest what to ask your local expert.</p>
+          <div className="assistant-side-icon"><Sparkles size={24} /></div>
+          <span className="eyebrow">{language === "kn" ? "ಸಹಾಯ ಕೇಂದ್ರ" : "TOPICS YOU CAN ASK"}</span>
+          <h3>{language === "kn" ? "ರೈತರ ಪ್ರಶ್ನೆಗಳಿಗೆ ನೇರ ಉತ್ತರ" : "Comprehensive Agricultural Guidance"}</h3>
+          <p>
+            {language === "kn"
+              ? "ನಿಮ್ಮ ಮಣ್ಣಿನ ಪ್ರಕಾರ, ಹವಾಮಾನ, ಮಾರುಕಟ್ಟೆ ಮಂಡಿ ದರಗಳು ಮತ್ತು ಕೀಟ ನಿರ್ವಹಣೆಯ ಬಗ್ಗೆ ನೇರವಾಗಿ ಪ್ರಶ್ನೆಗಳನ್ನು ಕೇಳಿ."
+              : "Ask our assistant anything regarding seasonal crops, weather precautions, mandi quotes, profit math, and pest management."}
+          </p>
           <div className="assistant-prompts">
-            <span><Check size={14} /> Simple, farmer-friendly answers</span>
-            <span><Check size={14} /> Grounded in your saved farm profile</span>
-            <span><Check size={14} /> Transparent when data is unavailable</span>
+            <span><Check size={16} /> <b>Crop Selection:</b> Soil & water matching</span>
+            <span><Check size={16} /> <b>Weather Advisory:</b> Live Open-Meteo alerts</span>
+            <span><Check size={16} /> <b>Mandi Rates:</b> Verified Karnataka APMC benchmarks</span>
+            <span><Check size={16} /> <b>Yield & Profit:</b> Gross Revenue & Net Profit formulas</span>
+            <span><Check size={16} /> <b>Pest Protection:</b> Integrated IPM & organic solutions</span>
+            <span><Check size={16} /> <b>Bilingual:</b> Supports Kannada (ಕನ್ನಡ) & English</span>
           </div>
         </aside>
       </div>

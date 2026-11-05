@@ -9,8 +9,8 @@ export const CROP_CATEGORIES = {
   "Commercial": ["Cotton", "Sugarcane", "Arecanut", "Coconut", "Coffee"]
 };
 
-// Verified Agmarknet / APMC Mandi benchmark records for Karnataka
-export const VERIFIED_AGMARKNET_RECORDS = [
+// Demonstration records for the UI; these are not verified market quotes.
+export const DEMO_MARKET_RECORDS = [
   // Mandya Mandi
   { crop: "Ragi", category: "Cereals & Millets", market: "Mandya APMC", district: "Mandya", minPrice: 3400, maxPrice: 3950, modalPrice: 3800, date: "2026-11-04", source: "Agmarknet / Karnataka State Agricultural Marketing Board" },
   { crop: "Paddy (Dhan)", category: "Cereals & Millets", market: "Mandya APMC", district: "Mandya", minPrice: 2100, maxPrice: 2450, modalPrice: 2320, date: "2026-11-04", source: "Agmarknet / Karnataka State Agricultural Marketing Board" },
@@ -138,51 +138,71 @@ export const HISTORICAL_PRICE_TRENDS = {
 const clean = (val) => String(val || "").trim().toLowerCase();
 
 export async function getMarketPrices(query = {}) {
-  // If external live API URL is provided, attempt to fetch live government Agmarknet / eNAM data
+  let liveFeedNotice = "";
   if (process.env.MARKET_API_URL) {
     try {
       const response = await axios.get(process.env.MARKET_API_URL, {
         params: {
           ...(query.crop ? { crop: query.crop } : {}),
           ...(query.district ? { district: query.district } : {}),
-          ...(query.market ? { market: query.market } : {})
+          ...(query.market ? { market: query.market } : {}),
+          ...(query.category ? { category: query.category } : {})
         },
         headers: process.env.MARKET_API_KEY ? { "X-Api-Key": process.env.MARKET_API_KEY } : {},
         timeout: 8000
       });
       const rows = Array.isArray(response.data) ? response.data : response.data?.records;
       if (Array.isArray(rows) && rows.length > 0) {
-        const prices = rows.map((r) => ({
-          crop: r.crop || r.commodity || r.commodity_name,
-          category: r.category || "General",
-          market: r.market || r.market_name || r.mandi,
-          district: r.district || "Karnataka",
-          minPrice: Number(r.minPrice ?? r.min_price),
-          maxPrice: Number(r.maxPrice ?? r.max_price),
-          modalPrice: Number(r.modalPrice ?? r.modal_price),
-          date: r.date || r.arrival_date || r.market_date || new Date().toISOString().split("T")[0],
-          source: r.source || "Government Agmarknet / eNAM Live Portal"
-        })).filter((r) => r.crop && r.market && Number.isFinite(r.modalPrice));
+        const prices = rows.map((r) => {
+          const date = r.date || r.arrival_date || r.market_date;
+          return {
+            crop: r.crop || r.commodity || r.commodity_name,
+            category: r.category || "General",
+            market: r.market || r.market_name || r.mandi,
+            district: r.district,
+            minPrice: Number(r.minPrice ?? r.min_price),
+            maxPrice: Number(r.maxPrice ?? r.max_price),
+            modalPrice: Number(r.modalPrice ?? r.modal_price),
+            date,
+            source: r.source || "Configured live market API"
+          };
+        }).filter((r) =>
+          r.crop && r.market && r.district &&
+          Number.isFinite(r.minPrice) && Number.isFinite(r.maxPrice) &&
+          Number.isFinite(r.modalPrice) && r.date && Number.isFinite(Date.parse(r.date))
+        ).filter((r) =>
+          (!query.crop || clean(r.crop).includes(clean(query.crop))) &&
+          (!query.district || clean(r.district) === clean(query.district)) &&
+          (!query.market || clean(r.market).includes(clean(query.market))) &&
+          (!query.category || r.category === query.category)
+        );
 
         if (prices.length > 0) {
           return {
             available: true,
             isLive: true,
-            source: "Agmarknet Live API (data.gov.in)",
+            source: "Configured live market API",
             statusLabel: "Live Market Feed",
             fetchedAt: new Date().toISOString(),
             prices,
+            availableMarkets: [...new Set(rows.map((r) => r.market || r.market_name || r.mandi).filter(Boolean))],
+            availableDistricts: [...new Set(rows.map((r) => r.district).filter(Boolean))],
+            availableCrops: [...new Set(rows.map((r) => r.crop || r.commodity || r.commodity_name).filter(Boolean))],
             categories: Object.keys(CROP_CATEGORIES)
           };
         }
       }
+      liveFeedNotice = "The configured live market feed returned no complete, dated price records.";
     } catch (apiError) {
-      // Graceful fallback to verified APMC benchmark data
+      console.error("Live market feed request failed:", apiError.message);
+      liveFeedNotice = "The configured live market feed could not be reached.";
     }
+  } else {
+    liveFeedNotice = "No live market feed is configured.";
   }
 
-  // Fallback to verified Karnataka APMC benchmark mandi data
-  let filtered = [...VERIFIED_AGMARKNET_RECORDS];
+  // Keep the market page usable without presenting demonstration values as live quotes.
+  let filtered = [...DEMO_MARKET_RECORDS];
 
   // 1. Filter by crop search query
   if (query.crop) {
@@ -210,18 +230,18 @@ export async function getMarketPrices(query = {}) {
   }
 
   // Extract unique lists for frontend dropdowns
-  const availableMarkets = [...new Set(VERIFIED_AGMARKNET_RECORDS.map((r) => r.market))];
-  const availableDistricts = [...new Set(VERIFIED_AGMARKNET_RECORDS.map((r) => r.district))];
-  const availableCrops = [...new Set(VERIFIED_AGMARKNET_RECORDS.map((r) => r.crop))];
+  const availableMarkets = [...new Set(DEMO_MARKET_RECORDS.map((r) => r.market))];
+  const availableDistricts = [...new Set(DEMO_MARKET_RECORDS.map((r) => r.district))];
+  const availableCrops = [...new Set(DEMO_MARKET_RECORDS.map((r) => r.crop))];
 
   return {
     available: filtered.length > 0,
     isLive: false,
-    source: "Agmarknet Verified Mandi Records (Karnataka APMC)",
-    statusLabel: "Verified APMC Reference Data (Sample / Offline)",
-    sampleNotice: "Displaying verified reference mandi records. To enable live quotes, configure a MARKET_API_KEY in server environment variables.",
+    source: "Namma Krishi demonstration dataset (not live)",
+    statusLabel: "Demo data — not live market prices",
+    sampleNotice: `${liveFeedNotice} Showing demonstration values only; these prices are not verified or live.`,
     fetchedAt: new Date().toISOString(),
-    prices: filtered,
+    prices: filtered.map((record) => ({ ...record, source: "Namma Krishi demo data (not live)" })),
     availableMarkets,
     availableDistricts,
     availableCrops,
@@ -233,7 +253,7 @@ export async function getMarketPrices(query = {}) {
 export function compareCropPrices(cropName) {
   if (!cropName) return [];
   const q = clean(cropName);
-  const matched = VERIFIED_AGMARKNET_RECORDS.filter(
+  const matched = DEMO_MARKET_RECORDS.filter(
     (r) => clean(r.crop).includes(q) || q.includes(clean(r.crop))
   );
   return matched.sort((a, b) => b.modalPrice - a.modalPrice);
@@ -249,7 +269,7 @@ export function getCropTrends(cropName) {
     }
   }
   // If not found in explicit trends table, aggregate dates from verified records
-  const records = VERIFIED_AGMARKNET_RECORDS.filter((r) =>
+  const records = DEMO_MARKET_RECORDS.filter((r) =>
     clean(r.crop).includes(clean(cropName)) || clean(cropName).includes(clean(r.crop))
   );
   return records.map((r) => ({

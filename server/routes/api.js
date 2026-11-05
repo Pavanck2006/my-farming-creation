@@ -10,7 +10,7 @@ import { locations } from "../data/locations.js";
 import { requireAuth } from "../middleware/auth.js";
 import { Activity, ChatHistory, CropPlan, Farmer, Notification } from "../models/index.js";
 import { answerAssistant } from "../services/assistant.js";
-import { getMarketPrices, compareCropPrices, getCropTrends } from "../services/market.js";
+import { getMarketPrices, getCropTrends } from "../services/market.js";
 import { recommend } from "../services/recommendations.js";
 import { getWeather } from "../services/weather.js";
 import {
@@ -695,15 +695,32 @@ router.get("/market/trends", async (req, res, next) => {
       category: req.query.category
     });
     const selectedCrop = crop || (result.prices[0]?.crop || "Ragi");
-    const trends = getCropTrends(selectedCrop);
-    const comparison = compareCropPrices(selectedCrop);
+    const cropQuery = String(selectedCrop).toLowerCase();
+    const matchingPrices = result.prices.filter((price) => {
+      const name = String(price.crop).toLowerCase();
+      return name.includes(cropQuery) || cropQuery.includes(name);
+    });
+    const trends = result.isLive
+      ? matchingPrices.map(({ date, modalPrice, market }) => ({ date, modalPrice, market }))
+      : getCropTrends(selectedCrop);
+    const comparison = matchingPrices.sort((a, b) => b.modalPrice - a.modalPrice);
     res.json({ ...result, trends, comparison, selectedCrop });
   } catch (error) { next(error); }
 });
 
-router.get("/market/compare", (req, res) => {
-  const comparison = compareCropPrices(req.query.crop || "Ragi");
-  res.json({ crop: req.query.crop || "Ragi", comparison });
+router.get("/market/compare", async (req, res, next) => {
+  try {
+    const crop = req.query.crop || "Ragi";
+    const result = await getMarketPrices({ crop });
+    const comparison = result.prices.sort((a, b) => b.modalPrice - a.modalPrice);
+    res.json({
+      crop,
+      comparison,
+      isLive: result.isLive,
+      source: result.source,
+      statusLabel: result.statusLabel
+    });
+  } catch (error) { next(error); }
 });
 
 router.get("/calendar", (_req, res) =>
@@ -821,6 +838,17 @@ router.get("/assistant/history", requireAuth, async (req, res, next) => {
     if (demoMode()) return res.json({ messages: demoChats.get(req.farmerId) || [] });
     const history = await ChatHistory.findOne({ farmer: req.farmerId });
     res.json({ messages: history?.messages || [] });
+  } catch (error) { next(error); }
+});
+
+router.delete("/assistant/history", requireAuth, async (req, res, next) => {
+  try {
+    if (demoMode()) {
+      demoChats.delete(req.farmerId);
+    } else {
+      await ChatHistory.findOneAndDelete({ farmer: req.farmerId });
+    }
+    res.json({ success: true, message: "Chat history cleared." });
   } catch (error) { next(error); }
 });
 
