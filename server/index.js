@@ -52,8 +52,8 @@ app.use((error, _req, res, _next) => {
 
 try {
   await connectDatabase();
-  app.listen(port, () => console.log(`CropWise API listening at http://localhost:${port}`));
+  app.listen(port, () => console.log(`Namma Krishi API listening at http://localhost:${port}`));
 } catch (error) {
-  console.error("Unable to start CropWise API because MongoDB could not connect:", error.message);
+  console.error("Unable to start Namma Krishi API because MongoDB could not connect:", error.message);
   process.exitCode = 1;
 }

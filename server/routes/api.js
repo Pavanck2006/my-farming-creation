@@ -255,7 +255,7 @@ router.post("/auth/login", async (req, res, next) => {
     res.json({
       token,
       farmer: normalizedFarmer(farmer),
-      message: "Welcome back to CropWise."
+      message: "Welcome back to Namma Krishi."
     });
   } catch (error) { next(error); }
 });
@@ -328,7 +328,7 @@ router.post("/auth/register", async (req, res, next) => {
 
     // Welcome notification
     await createNotification(farmerId, {
-      title: "Welcome to CropWise! / ಕ್ರಾಪ್‌ವೈಸ್‌ಗೆ ಸುಸ್ವಾಗತ!",
+      title: "Welcome to Namma Krishi! / ನಮ್ಮ ಕೃಷಿಗೆ ಸುಸ್ವಾಗತ!",
       description: "Your farmer profile is ready. Start by exploring crop recommendations tailored to your region.",
       type: "general"
     });
@@ -839,7 +839,7 @@ router.post("/assistant/chat", requireAuth, async (req, res, next) => {
     // Log AI interaction
     await logActivity(req.farmerId, {
       activityType: "ai_conversation",
-      title: "CropWise Assistant Consultation",
+      title: "Namma Krishi Assistant Consultation",
       details: `Asked: "${message.slice(0, 60)}${message.length > 60 ? "..." : ""}"`,
       status: "completed"
     });

@@ -212,7 +212,7 @@ function Landing() {
     <main className="landing">
       <header className="landing-nav">
         <Link className="brand" to="/">
-          <span className="brand-icon"><Leaf size={19} /></span>cropwise
+          <span className="brand-icon"><Leaf size={19} /></span>Namma Krishi
         </Link>
         <nav>
           <a href="#how">{language === "kn" ? "ಹೇಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ" : "How it works"}</a>
@@ -288,7 +288,7 @@ function Landing() {
         <div className="section-heading">
           <span className="eyebrow">A little more clarity</span>
           <h2>One season. Many possibilities.</h2>
-          <p>CropWise helps you explore them before you put a seed in the ground.</p>
+          <p>Namma Krishi helps you explore them before you put a seed in the ground.</p>
         </div>
         <div id="features" className="feature-cards">
           <div className="feature-card">
@@ -323,7 +323,7 @@ function Landing() {
         <Leaf className="cta-decoration" size={140} />
       </section>
       <footer className="landing-footer">
-        <Link className="brand" to="/"><span className="brand-icon"><Leaf size={17} /></span>cropwise</Link>
+        <Link className="brand" to="/"><span className="brand-icon"><Leaf size={17} /></span>Namma Krishi</Link>
         <span>Helpful estimates, not guarantees. Always seek local agricultural advice.</span>
         <span>Made for farmers, with care. <span className="heart">♥</span></span>
       </footer>
@@ -365,12 +365,30 @@ function Login() {
 
   return (
     <main className="auth-page">
-      <Link to="/" className="brand auth-brand">
-        <span className="brand-icon"><Leaf size={19} /></span>cropwise
-      </Link>
+      <div className="auth-logo-header">
+        <Link to="/" className="auth-logo-link" title="Namma Krishi">
+          <img
+            src="/namma-krishi-logo.png"
+            alt="Namma Krishi Logo"
+            className="auth-logo-image"
+            onError={(e) => {
+              // Try fallback or hide cleanly
+              if (!e.currentTarget.dataset.retried) {
+                e.currentTarget.dataset.retried = "true";
+                e.currentTarget.src = "/logo.png";
+              } else {
+                e.currentTarget.style.display = "none";
+              }
+            }}
+          />
+        </Link>
+        <Link to="/" className="brand auth-brand">
+          <span className="brand-icon"><Leaf size={19} /></span>Namma Krishi
+        </Link>
+      </div>
       <div className="auth-card">
         <div className="auth-emblem"><Leaf size={23} /></div>
-        <span className="eyebrow">{language === "kn" ? "ಕ್ರಾಪ್‌ವೈಸ್‌ಗೆ ಸ್ವಾಗತ" : "Welcome to CropWise"}</span>
+        <span className="eyebrow">{language === "kn" ? "ನಮ್ಮ ಕೃಷಿಗೆ ಸ್ವಾಗತ" : "Welcome to Namma Krishi"}</span>
         <h1>{language === "kn" ? "ರೈತರ ಸೈನ್ ಇನ್" : "Farmer Sign In"}</h1>
         <p>
           {language === "kn"
@@ -421,7 +439,7 @@ function Login() {
 
         <div className="auth-bottom-links" style={{ marginTop: 20, textAlign: "center", fontSize: 12 }}>
           <span className="muted">
-            {language === "kn" ? "ಹೊಸ ರೈತರೇ? " : "New to CropWise? "}
+            {language === "kn" ? "ಹೊಸ ರೈತರೇ? " : "New to Namma Krishi? "}
           </span>
           <Link to="/register" state={{ phone }} style={{ color: "var(--green)", fontWeight: 700 }}>
             {language === "kn" ? "ಇಲ್ಲಿ ನೋಂದಣಿ ಮಾಡಿ" : "Register here"}
@@ -434,7 +452,7 @@ function Login() {
         </div>
       </div>
       <Link to="/" className="back-home">
-        <ChevronLeft size={15} /> {language === "kn" ? "ಮುಖಪುಟಕ್ಕೆ ಹಿಂತಿರುಗಿ" : "Back to CropWise"}
+        <ChevronLeft size={15} /> {language === "kn" ? "ಮುಖಪುಟಕ್ಕೆ ಹಿಂತಿರುಗಿ" : "Back to Namma Krishi"}
       </Link>
     </main>
   );
@@ -493,9 +511,27 @@ function Register() {
 
   return (
     <main className="auth-page">
-      <Link to="/" className="brand auth-brand">
-        <span className="brand-icon"><Leaf size={19} /></span>cropwise
-      </Link>
+      <div className="auth-logo-header">
+        <Link to="/" className="auth-logo-link" title="Namma Krishi">
+          <img
+            src="/namma-krishi-logo.png"
+            alt="Namma Krishi Logo"
+            className="auth-logo-image"
+            onError={(e) => {
+              // Try fallback or hide cleanly
+              if (!e.currentTarget.dataset.retried) {
+                e.currentTarget.dataset.retried = "true";
+                e.currentTarget.src = "/logo.png";
+              } else {
+                e.currentTarget.style.display = "none";
+              }
+            }}
+          />
+        </Link>
+        <Link to="/" className="brand auth-brand">
+          <span className="brand-icon"><Leaf size={19} /></span>Namma Krishi
+        </Link>
+      </div>
       <div className="auth-card">
         <div className="auth-emblem"><Leaf size={23} /></div>
         <span className="eyebrow">{language === "kn" ? "ಮೊದಲ ಬಾರಿಯ ನೋಂದಣಿ" : "First-time Registration"}</span>
@@ -503,7 +539,7 @@ function Register() {
         <p>
           {language === "kn"
             ? "ನಿಮ್ಮ ಕೃಷಿ ಸಲಹೆಗಳನ್ನು ಪಡೆಯಲು ನಿಮ್ಮ ವಿವರಗಳನ್ನು ಒಮ್ಮೆ ನಮೂದಿಸಿ."
-            : "Enter your contact and farm location details to create your CropWise account."}
+            : "Enter your contact and farm location details to create your Namma Krishi account."}
         </p>
 
         <form className="form-stack" onSubmit={submit}>
@@ -845,7 +881,7 @@ function AppLayout({ children }) {
       <aside className={`sidebar sidebar-dark-green ${mobileMenu ? "sidebar-open" : ""}`}>
         <Link className="brand sidebar-brand" to="/app">
           <span className="brand-icon"><Leaf size={18} /></span>
-          <span className="brand-name-dark">cropwise</span>
+          <span className="brand-name-dark">Namma Krishi</span>
         </Link>
 
         {/* Farmer Profile Button at Top-Left */}
@@ -900,8 +936,8 @@ function AppLayout({ children }) {
             <b>{language === "kn" ? "ನಿಮ್ಮ ಸಹಾಯಕ್ಕೆ" : "Here to help"}</b>
             <p>
               {language === "kn"
-                ? "CropWise ಮಾರ್ಗದರ್ಶಿ ಮಾತ್ರ. ಸ್ಥಳೀಯ ಕೃಷಿ ತಜ್ಞರಿಂದ ಸಲಹೆ ಪಡೆಯಿರಿ."
-                : "CropWise provides guided estimates. Confirm with local KVK before sowing."}
+                ? "ನಮ್ಮ ಕೃಷಿ ಮಾರ್ಗದರ್ಶಿ ಮಾತ್ರ. ಸ್ಥಳೀಯ ಕೃಷಿ ತಜ್ಞರಿಂದ ಸಲಹೆ ಪಡೆಯಿರಿ."
+                : "Namma Krishi provides guided estimates. Confirm with local KVK before sowing."}
             </p>
             <Link to="/app/assistant">
               {language === "kn" ? "ಸಹಾಯಕರನ್ನು ಕೇಳಿ" : "Ask the assistant"} <ArrowRight size={13} />
@@ -913,7 +949,7 @@ function AppLayout({ children }) {
             <span>{language === "kn" ? "ಸೈನ್ ಔಟ್" : "Sign out"}</span>
           </button>
 
-          <div className="sidebar-version">CROPWISE · KARNATAKA</div>
+          <div className="sidebar-version">NAMMA KRISHI · KARNATAKA</div>
         </div>
       </aside>
 
@@ -937,7 +973,7 @@ function AppLayout({ children }) {
               <Menu size={19} />
             </button>
             <div className="breadcrumbs">
-              <span>CropWise</span>
+              <span>Namma Krishi</span>
               <ChevronRight size={14} />
               <b>
                 {active?.title ||
@@ -1026,7 +1062,7 @@ function AppLayout({ children }) {
         <main className="page-content">{children}</main>
 
         <footer className="app-footer">
-          <span>CropWise · Intelligent Farming Decision Engine</span>
+          <span>Namma Krishi · Intelligent Farming Decision Engine</span>
           <span>Estimates for guidance only · Verify with your local agricultural officer</span>
         </footer>
       </div>
@@ -1301,7 +1337,7 @@ function Dashboard() {
         <div className="assistant-bubble"><Sparkles size={20} /></div>
         <div>
           <span className="eyebrow">{language === "kn" ? "ಸಹಾಯ ಬೇಕೇ?" : "A QUESTION ON YOUR MIND?"}</span>
-          <h3>{language === "kn" ? "ನಿಮ್ಮ ಬೆಳೆ ಮತ್ತು ನೀರಿನ ಬಗ್ಗೆ ಪ್ರಶ್ನೆಗಳನ್ನು ಕೇಳಿ." : "Your CropWise assistant is here to help."}</h3>
+          <h3>{language === "kn" ? "ನಿಮ್ಮ ಬೆಳೆ ಮತ್ತು ನೀರಿನ ಬಗ್ಗೆ ಪ್ರಶ್ನೆಗಳನ್ನು ಕೇಳಿ." : "Your Namma Krishi assistant is here to help."}</h3>
           <p>{language === "kn" ? "ಯಾವ ಬೆಳೆ ಸೂಕ್ತ, ರೋಗ ನಿರ್ವಹಣೆ ಮತ್ತು ಮಣ್ಣಿನ ಬಗ್ಗೆ ಕೇಳಿ." : "Ask questions about crops, water needs, sowing windows and pest alerts."}</p>
         </div>
         <Link to="/app/assistant" className="button button-white">
@@ -1995,7 +2031,7 @@ function MarketPage() {
       <PageTitle
         eyebrow="MARKET WATCH"
         title="Know before you sell."
-        detail="Compare dated market records from the configured provider. CropWise never invents mandi prices."
+        detail="Compare dated market records from the configured provider. Namma Krishi never invents mandi prices."
         action={
           <button className="button button-outline" onClick={load}>
             <TrendingUp size={15} /> Refresh prices
@@ -2301,7 +2337,7 @@ function AssistantPage() {
   return (
     <>
       <PageTitle
-        eyebrow="CROPWISE ASSISTANT"
+        eyebrow="NAMMA KRISHI ASSISTANT"
         title="A helpful voice in your corner."
         detail="Ask simple questions about crops, water or your season. Answers stay honest about what we know."
         action={<div className="ai-status"><span /> Assistant ready</div>}
@@ -2818,7 +2854,7 @@ function ProfilePage() {
               <span className="section-icon"><Settings size={17} /></span>
               <div>
                 <h2>{language === "kn" ? "ಭಾಷಾ ಆದ್ಯತೆ" : "Language Preferences"}</h2>
-                <p>Choose your preferred language for the CropWise interface.</p>
+                <p>Choose your preferred language for the Namma Krishi interface.</p>
               </div>
             </div>
             <div className="language-cards">

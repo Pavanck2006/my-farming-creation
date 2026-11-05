@@ -1,9 +1,9 @@
-# CropWise – Profile, Notifications and Login Improvements
+# Namma Krishi – Profile, Notifications and Login Improvements
 
 > **Problem Statement ID:** DL-SJBIT-HK26-AGR006  
 > **Platform:** MERN Stack (MongoDB, Express, React, Node.js + Vite & TailwindCSS)
 
-CropWise is an intelligent, farmer-friendly decision engine and crop simulator built specifically for Karnataka's farming community. It offers transparent crop suitability scoring, multi-crop trade-off simulation, Open-Meteo weather integration, seasonal crop calendars, pest monitoring advisories, AI assistance, and comprehensive farming activity tracking.
+Namma Krishi is an intelligent, farmer-friendly decision engine and crop simulator built specifically for Karnataka's farming community. It offers transparent crop suitability scoring, multi-crop trade-off simulation, Open-Meteo weather integration, seasonal crop calendars, pest monitoring advisories, AI assistance, and comprehensive farming activity tracking.
 
 ---
 

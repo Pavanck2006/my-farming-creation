@@ -135,7 +135,11 @@ h1, h2, h3, .brand { font-family: Manrope, "DM Sans", sans-serif; }
 
 /* Authentication */
 .auth-page { display: flex; min-height: 100vh; flex-direction: column; align-items: center; justify-content: center; padding: 35px 20px; background: radial-gradient(ellipse at 50% 12%, rgba(216, 229, 204, .45), transparent 49%), var(--page); }
-.auth-brand { margin-bottom: 28px; }
+.auth-logo-header { display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 22px; text-align: center; }
+.auth-logo-link { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; margin-bottom: 12px; transition: transform 0.18s ease; }
+.auth-logo-link:hover { transform: scale(1.02); }
+.auth-logo-image { max-width: 170px; max-height: 90px; width: auto; height: auto; object-fit: contain; display: block; }
+.auth-brand { margin-bottom: 0; }
 .auth-card { width: min(100%, 418px); border: 1px solid var(--line); border-radius: 19px; background: var(--surface); box-shadow: var(--shadow); padding: 34px 35px 27px; }
 .auth-emblem { display: grid; width: 43px; height: 43px; place-items: center; margin-bottom: 22px; border-radius: 13px; background: var(--green-soft); color: var(--green); }
 .auth-card h1 { margin: 9px 0 8px; font-size: 26px; letter-spacing: -.9px; }
@@ -693,6 +697,7 @@ tbody tr:last-child td { border-bottom: 0; }
   .section-heading h2 { font-size: 24px; }
   .landing-cta { margin: 0 16px 35px; }
   .landing-footer { flex-direction: column; align-items: flex-start; padding-inline: 19px; }
+  .auth-logo-image { max-width: 135px; max-height: 75px; margin-bottom: 8px; }
   .auth-card { padding: 27px 22px 23px; }
   .auth-card h1 { font-size: 23px; }
   .page-content { padding: 21px 13px; }
