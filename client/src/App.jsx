@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { RefreshCw, Wind,  useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowDownRight, ArrowRight, ArrowUpRight, Bell, CalendarDays, Check, CheckCheck,
@@ -139,36 +139,156 @@ function Stat({ icon: Icon, label, value, foot, tone = "green" }) {
 }
 
 function CropCard({ crop, onSave, onCompare, selected }) {
+  const { language } = useApp();
+  const [customYield, setCustomYield] = useState(crop.yieldPerAcre ?? 10);
+  const [customPrice, setCustomPrice] = useState(crop.pricePerQuintal ?? crop.price ?? 3500);
+  const [customCost, setCustomCost] = useState(crop.estimatedCostPerAcre ?? crop.costPerAcre ?? 15000);
+  const [showCalc, setShowCalc] = useState(false);
+
+  useEffect(() => {
+    setCustomYield(crop.yieldPerAcre ?? 10);
+    setCustomPrice(crop.pricePerQuintal ?? crop.price ?? 3500);
+    setCustomCost(crop.estimatedCostPerAcre ?? crop.costPerAcre ?? 15000);
+  }, [crop]);
+
+  const y = Math.max(0, Number(customYield) || 0);
+  const p = Math.max(0, Number(customPrice) || 0);
+  const c = Math.max(0, Number(customCost) || 0);
+  const grossRev = Math.round(y * p);
+  const netProfit = Math.round(grossRev - c);
+
+  const resetCalc = () => {
+    setCustomYield(crop.yieldPerAcre ?? 10);
+    setCustomPrice(crop.pricePerQuintal ?? crop.price ?? 3500);
+    setCustomCost(crop.estimatedCostPerAcre ?? crop.costPerAcre ?? 15000);
+  };
+
   return (
     <article className="crop-card">
       <div className="crop-card-top">
-        <div className="crop-symbol"><Wheat size={20} /></div>
+        <div className="crop-symbol"><Wheat size={24} /></div>
         <div className={`score ${crop.score >= 75 ? "score-high" : ""}`}>
           {crop.score}<small>% match</small>
         </div>
       </div>
+
       <div className="crop-name-row">
         <div>
           <h3>{crop.name}</h3>
-          <span className="muted small">{crop.season} season · {crop.duration} days</span>
+          <span className="muted small">
+            {crop.season ? (Array.isArray(crop.season) ? crop.season.join(", ") : crop.season) : "Kharif"} season · {crop.duration} days
+          </span>
         </div>
       </div>
+
       <p className="crop-reason">{crop.reasons?.slice(0, 2).join(" · ") || crop.note}</p>
+
       <div className="crop-metrics">
-        <span><Droplets size={14} /> {crop.water} water</span>
-        <span><ShieldCheck size={14} /> {crop.risk} risk</span>
+        <span><Droplets size={16} /> <b>{crop.water}</b> water</span>
+        <span><ShieldCheck size={16} /> <b>{crop.risk || "Low-medium"}</b> risk</span>
       </div>
-      <div className="crop-finance">
-        <div><span>Estimated profit / acre</span><strong>{formatMoney(crop.profit / (crop.area || 1))}</strong></div>
-        <div><span>Reference yield / acre</span><strong>{crop.yieldPerAcre} q</strong></div>
-        <div><span>Model price assumption / q</span><strong>{formatMoney(crop.pricePerQuintal)}</strong></div>
+
+      {/* Complete Financial Breakdown */}
+      <div className="crop-finance-grid">
+        <div className="finance-item">
+          <span>Expected Yield</span>
+          <strong>{y} <small>q / acre</small></strong>
+        </div>
+        <div className="finance-item">
+          <span>Market Price</span>
+          <strong>{formatMoney(p)} <small>/ q</small></strong>
+        </div>
+        <div className="finance-item">
+          <span>Cultivation Cost</span>
+          <strong>{formatMoney(c)} <small>/ acre</small></strong>
+        </div>
+        <div className="finance-item">
+          <span>Gross Revenue</span>
+          <strong className="revenue-val">{formatMoney(grossRev)} <small>/ acre</small></strong>
+        </div>
+        <div className="finance-item profit-item">
+          <span>Estimated Net Profit</span>
+          <strong className={netProfit >= 0 ? "profit-val" : "loss-val"}>
+            {formatMoney(netProfit)} <small>/ acre</small>
+          </strong>
+        </div>
       </div>
+
+      {/* Interactive Farmer Profit Calculator Toggle */}
+      <div className="calc-toggle-row">
+        <button
+          type="button"
+          className="button button-outline button-small calc-toggle-btn"
+          onClick={() => setShowCalc(!showCalc)}
+        >
+          <TrendingUp size={15} /> {showCalc ? "Hide Profit Calculator" : "Calculate My Own Profit"}
+        </button>
+      </div>
+
+      {showCalc && (
+        <div className="farmer-calc-box">
+          <div className="calc-header">
+            <b>Custom Profit Estimate ({crop.name})</b>
+            <button type="button" onClick={resetCalc} className="text-button">Reset Reference</button>
+          </div>
+          <div className="calc-inputs-grid">
+            <label>
+              <span>Expected Yield (q/acre)</span>
+              <input
+                type="number"
+                min="1"
+                max="200"
+                step="0.5"
+                value={customYield}
+                onChange={(e) => setCustomYield(e.target.value)}
+              />
+            </label>
+            <label>
+              <span>Market Price (₹/q)</span>
+              <input
+                type="number"
+                min="100"
+                max="100000"
+                step="50"
+                value={customPrice}
+                onChange={(e) => setCustomPrice(e.target.value)}
+              />
+            </label>
+            <label>
+              <span>Cultivation Cost (₹/acre)</span>
+              <input
+                type="number"
+                min="0"
+                max="500000"
+                step="500"
+                value={customCost}
+                onChange={(e) => setCustomCost(e.target.value)}
+              />
+            </label>
+          </div>
+          <div className="calc-result-bar">
+            <div>
+              <small>Custom Gross Revenue</small>
+              <b>{formatMoney(grossRev)}</b>
+            </div>
+            <div className="calc-profit-result">
+              <small>Custom Net Profit</small>
+              <b className={netProfit >= 0 ? "profit-val" : "loss-val"}>{formatMoney(netProfit)} / acre</b>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="estimate-disclaimer">
+        ⚠️ Estimated reference values. Yield and profit are never guaranteed.
+      </div>
+
       <div className="crop-card-actions">
         <label className="compare-check">
           <input type="checkbox" checked={Boolean(selected)} onChange={() => onCompare?.(crop.name)} /> Compare
         </label>
         <button className="text-button" onClick={() => onSave?.(crop)}>
-          Save plan <ArrowRight size={14} />
+          Save plan <ArrowRight size={15} />
         </button>
       </div>
     </article>
@@ -1906,95 +2026,179 @@ function SimulatorPage() {
 // WEATHER PAGE
 // ==========================================
 function WeatherPage() {
-  const { farmer } = useApp();
+  const { farmer, language } = useApp();
   const [weather, setWeather] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
+  const fetchWeather = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    setError("");
+
     if (!farmer?.district) {
-      setWeather({ available: false, reason: "Add your district to Farm profile to request local weather." });
+      setWeather({
+        available: false,
+        reason: language === "kn"
+          ? "ಹವಾಮಾನ ವರದಿಯನ್ನು ಪಡೆಯಲು ನಿಮ್ಮ ಕೃಷಿ ಪ್ರೊಫೈಲ್‌ನಲ್ಲಿ ಜಿಲ್ಲೆ ಮತ್ತು ತಾಲೂಕನ್ನು ಆಯ್ಕೆ ಮಾಡಿ."
+          : "Please select your district and taluk in your Farm Profile to view live local weather."
+      });
       setLoading(false);
+      setRefreshing(false);
       return;
     }
-    api.get("/weather/forecast", { params: { district: farmer.district, taluk: farmer.taluk } })
-      .then(({ data }) => setWeather(data))
-      .catch((reason) => setError(errorMessage(reason)))
-      .finally(() => setLoading(false));
-  }, [farmer]);
 
-  if (loading) return <Loading label="Checking the latest available weather…" />;
+    try {
+      const { data } = await api.get("/weather/forecast", {
+        params: { district: farmer.district, taluk: farmer.taluk }
+      });
+      setWeather(data);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [farmer, language]);
+
+  useEffect(() => {
+    fetchWeather();
+  }, [fetchWeather]);
+
+  if (loading) return <Loading label={language === "kn" ? "ಹವಾಮಾನ ಮಾಹಿತಿಯನ್ನು ಪಡೆಯಲಾಗುತ್ತಿದೆ…" : "Retrieving live weather from Open-Meteo…"} />;
 
   return (
     <>
       <PageTitle
-        eyebrow="WEATHER REPORT"
-        title={weather?.available ? `Weather near ${farmer.taluk}` : "Your weather report"}
-        detail="Forecast data is provided by Open-Meteo. Use local observations before changing a field plan."
+        eyebrow={language === "kn" ? "ಹವಾಮಾನ ವರದಿ" : "LIVE WEATHER DASHBOARD"}
+        title={weather?.available ? `${weather.location} ${language === "kn" ? "ಹವಾಮಾನ" : "Weather"}` : (language === "kn" ? "ಹವಾಮಾನ ವರದಿ" : "Your Weather Report")}
+        detail={language === "kn"
+          ? "ಓಪನ್-ಮೆಟಿಯೊ ಉಪಗ್ರಹ ಮತ್ತು ಮುನ್ಸೂಚನೆ ಮಾದರಿಗಳಿಂದ ಲೈವ್ ಹವಾಮಾನ. ಹೊಲದ ಕೆಲಸಕ್ಕೆ ಮುನ್ನ ಸ್ಥಳೀಯ ಪರಿಸ್ಥಿತಿಯನ್ನು ಪರಿಶೀಲಿಸಿ."
+          : "Real-time observations and 7-day forecast powered by Open-Meteo. Use actual field observations before field operations."}
         action={
           <button
             className="button button-outline"
-            onClick={() => {
-              setLoading(true);
-              setError("");
-              api.get("/weather/forecast", { params: { district: farmer?.district, taluk: farmer?.taluk } })
-                .then(({ data }) => setWeather(data))
-                .catch((reason) => setError(errorMessage(reason)))
-                .finally(() => setLoading(false));
-            }}
+            onClick={() => fetchWeather(true)}
+            disabled={refreshing}
           >
-            Refresh forecast <ArrowRight size={15} />
+            <RefreshCw size={16} className={refreshing ? "spin-icon" : ""} />
+            {refreshing ? (language === "kn" ? "ನವೀಕರಿಸಲಾಗುತ್ತಿದೆ…" : "Updating…") : (language === "kn" ? "ಹವಾಮಾನ ನವೀಕರಿಸಿ" : "Refresh Forecast")}
           </button>
         }
       />
+
       {error && <Notice kind="warning">{error}</Notice>}
+
       {!weather?.available ? (
         <div className="panel blank-panel">
-          <CloudSun size={32} />
-          <h2>Weather forecast unavailable</h2>
-          <p>{weather?.reason || "The weather service could not provide a forecast right now."} Weather data is never invented.</p>
-          <Link to="/app/profile" className="button button-outline">Set farm location</Link>
+          <CloudSun size={52} className="muted" />
+          <h2>{language === "kn" ? "ಹವಾಮಾನ ಮಾಹಿತಿ ಲಭ್ಯವಿಲ್ಲ" : "Weather Location Not Connected"}</h2>
+          <p>{weather?.reason || "Complete your farm profile to view local weather."}</p>
+          <Link to="/app/profile" className="button button-primary" style={{ marginTop: 14 }}>
+            <Settings size={17} /> {language === "kn" ? "ಜಿಲ್ಲೆ & ತಾಲೂಕು ಸೇರಿಸಿ" : "Set Farm District & Taluk"}
+          </Link>
         </div>
       ) : (
         <>
-          <div className="weather-summary">
-            <div className="panel weather-main">
-              <span className="eyebrow">CURRENT CONDITIONS · {weather.location}</span>
-              <div className="current-weather-line">
-                <div>
-                  <span className="current-temp">{Math.round(weather.current.temperature_2m)}°</span>
-                  <span className="current-condition">Current temperature</span>
-                </div>
-                <div className="sun-disc">☀</div>
+          <div className="weather-summary-container">
+            <div className="panel weather-main-card">
+              <div className="weather-card-header">
+                <span className="eyebrow">CURRENT OBSERVATION</span>
+                <span className="live-pill"><span className="live-dot" /> LIVE</span>
               </div>
-              <div className="weather-detail-grid">
-                <div><span>Humidity</span><b>{weather.current.relative_humidity_2m}%</b></div>
-                <div><span>Rainfall now</span><b>{weather.current.precipitation} mm</b></div>
-                <div><span>Wind speed</span><b>{weather.current.wind_speed_10m} km/h</b></div>
+              <div className="weather-loc-title">
+                <h2>{weather.location}</h2>
+                <small className="muted">Lat: {weather.coordinates?.lat?.toFixed(2)}°, Lon: {weather.coordinates?.lon?.toFixed(2)}°</small>
+              </div>
+
+              <div className="current-temp-hero">
+                <div className="temp-display">
+                  <span className="temp-number">{Math.round(weather.current.temperature_2m)}°C</span>
+                  <span className="temp-feels">Feels like {Math.round(weather.current.apparent_temperature)}°C</span>
+                </div>
+                <div className="weather-glyph-big">
+                  {weather.current.precipitation > 0 ? "🌧️" : weather.current.temperature_2m > 30 ? "☀️" : "⛅"}
+                </div>
+              </div>
+
+              <div className="weather-stats-quad">
+                <div className="quad-item">
+                  <span className="quad-label"><Droplets size={16} /> Rainfall Now</span>
+                  <b className="quad-val">{weather.current.precipitation} mm</b>
+                </div>
+                <div className="quad-item">
+                  <span className="quad-label"><CloudSun size={16} /> Humidity</span>
+                  <b className="quad-val">{weather.current.relative_humidity_2m}%</b>
+                </div>
+                <div className="quad-item">
+                  <span className="quad-label"><Wind size={16} /> Wind Speed</span>
+                  <b className="quad-val">{weather.current.wind_speed_10m} km/h</b>
+                </div>
+                <div className="quad-item">
+                  <span className="quad-label"><Clock size={16} /> Last Updated</span>
+                  <b className="quad-val">{new Date(weather.fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</b>
+                </div>
               </div>
             </div>
-            <div className="panel weather-guidance">
-              <span className="eyebrow">A HELPFUL REMINDER</span>
-              <h2>Keep an eye on the forecast.</h2>
-              <p>Check expected rain and field conditions before sowing or irrigation. Forecasts can change; confirm with local observations.</p>
-              <div className="weather-source"><CloudSun size={16} /> Open-Meteo · Updated {new Date(weather.fetchedAt).toLocaleString()}</div>
-              <Notice kind="warning">Check official local advisories for extreme weather warnings.</Notice>
+
+            <div className="panel weather-advisory-card">
+              <span className="eyebrow">FARMING ADVISORY & FORECAST TRENDS</span>
+              <h3>Expected Rainfall & Temperature Changes</h3>
+
+              <div className="trend-bullet-box">
+                <div className="trend-row">
+                  <span className="trend-icon">🌧️</span>
+                  <div>
+                    <b>Rainfall Outlook: {weather.summary?.totalWeeklyRain} mm expected this week</b>
+                    <p>{weather.summary?.rainAlert}</p>
+                    <small className="muted">Max rain probability: {weather.summary?.maxRainChance}% over {weather.summary?.rainyDaysCount} wet day(s).</small>
+                  </div>
+                </div>
+
+                <div className="trend-row" style={{ marginTop: 14 }}>
+                  <span className="trend-icon">🌡️</span>
+                  <div>
+                    <b>Temperature Trend</b>
+                    <p>{weather.summary?.tempTrend}</p>
+                    <small className="muted">7-day average daytime maximum: {weather.summary?.weekAvgMaxTemp}°C.</small>
+                  </div>
+                </div>
+              </div>
+
+              <div className="weather-update-footer">
+                <small className="muted">
+                  <ShieldCheck size={14} /> Data Source: {weather.source} · Updated {new Date(weather.fetchedAt).toLocaleDateString()} {new Date(weather.fetchedAt).toLocaleTimeString()}
+                </small>
+              </div>
             </div>
           </div>
-          <section className="panel forecast-panel">
-            <div className="section-top">
-              <div><span className="eyebrow">LOOKING AHEAD</span><h2>7-day forecast</h2></div>
-              <span className="source-tag">Open-Meteo · {weather.daily.time.length} days</span>
+
+          <section className="panel forecast-section-card">
+            <div className="section-top" style={{ marginBottom: 16 }}>
+              <div>
+                <span className="eyebrow">SEVEN-DAY OUTLOOK</span>
+                <h2>7-Day Weather Forecast</h2>
+              </div>
+              <span className="source-tag">Open-Meteo · 7 Days</span>
             </div>
-            <div className="forecast-grid">
+
+            <div className="forecast-grid-seven">
               {weather.daily.time.map((day, i) => (
-                <div className="forecast-card" key={day}>
-                  <b>{new Date(day).toLocaleDateString("en", { weekday: "short" })}</b>
-                  <span className="forecast-date">{new Date(day).toLocaleDateString("en", { month: "short", day: "numeric" })}</span>
-                  <span className="forecast-weather-icon">{weather.daily.precipitation_probability_max[i] > 45 ? "🌧" : "☀"}</span>
-                  <b>{Math.round(weather.daily.temperature_2m_max[i])}° <span className="muted">{Math.round(weather.daily.temperature_2m_min[i])}°</span></b>
-                  <small><Droplets size={12} /> {weather.daily.precipitation_sum[i]} mm</small>
-                  <small>{weather.daily.precipitation_probability_max[i] ?? 0}% rain chance</small>
+                <div className="forecast-day-card" key={day}>
+                  <b className="day-name">{new Date(day).toLocaleDateString(language === "kn" ? "kn" : "en", { weekday: "short" })}</b>
+                  <span className="day-date">{new Date(day).toLocaleDateString(language === "kn" ? "kn" : "en", { month: "short", day: "numeric" })}</span>
+                  <div className="day-weather-icon">
+                    {weather.daily.precipitation_probability_max[i] > 50 || weather.daily.precipitation_sum[i] > 2 ? "🌧️" : weather.daily.temperature_2m_max[i] > 31 ? "☀️" : "⛅"}
+                  </div>
+                  <div className="day-temps">
+                    <span className="temp-high">{Math.round(weather.daily.temperature_2m_max[i])}°</span>
+                    <span className="temp-low">{Math.round(weather.daily.temperature_2m_min[i])}°</span>
+                  </div>
+                  <div className="day-rain-info">
+                    <span><Droplets size={14} /> {weather.daily.precipitation_sum[i]} mm</span>
+                    <small>{weather.daily.precipitation_probability_max[i] ?? 0}% rain</small>
+                  </div>
                 </div>
               ))}
             </div>
@@ -2009,120 +2213,248 @@ function WeatherPage() {
 // MARKET PRICES PAGE
 // ==========================================
 function MarketPage() {
-  const { farmer } = useApp();
-  const [market, setMarket] = useState(null);
+  const { farmer, language } = useApp();
+  const [marketData, setMarketData] = useState(null);
   const [error, setError] = useState("");
-  const [crop, setCrop] = useState("");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(() => {
-    setLoading(true);
+  const [cropSearch, setCropSearch] = useState("");
+  const [selectedDistrict, setSelectedDistrict] = useState(farmer?.district || "all");
+  const [selectedMarket, setSelectedMarket] = useState("all");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+
+  const loadMarket = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
     setError("");
-    api.get("/market/trends", { params: { crop: crop || undefined, district: farmer?.district } })
-      .then(({ data }) => setMarket(data))
-      .catch((reason) => setError(errorMessage(reason)))
-      .finally(() => setLoading(false));
-  }, [crop, farmer]);
 
-  useEffect(() => { load(); }, [load]);
+    try {
+      const { data } = await api.get("/market/trends", {
+        params: {
+          crop: cropSearch || undefined,
+          district: selectedDistrict !== "all" ? selectedDistrict : undefined,
+          market: selectedMarket !== "all" ? selectedMarket : undefined,
+          category: selectedCategory !== "all" ? selectedCategory : undefined
+        }
+      });
+      setMarketData(data);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [cropSearch, selectedDistrict, selectedMarket, selectedCategory]);
+
+  useEffect(() => {
+    loadMarket();
+  }, [loadMarket]);
 
   return (
     <>
       <PageTitle
-        eyebrow="MARKET WATCH"
-        title="Know before you sell."
-        detail="Compare dated market records from the configured provider. Namma Krishi never invents mandi prices."
+        eyebrow={language === "kn" ? "ಮಾರುಕಟ್ಟೆ ಧಾರಣೆ" : "AGRICULTURAL MARKET WATCH"}
+        title={language === "kn" ? "ಕರ್ನಾಟಕ ಮಂಡಿ ದರಗಳು" : "Karnataka Mandi Prices"}
+        detail={language === "kn"
+          ? "ಅಧಿಕೃತ ಎಪಿಎಂಸಿ ಮಂಡಿ ದಾಖಲೆಗಳು ಮತ್ತು ನೈಜ ಧಾರಣೆಗಳು. ಮಾರಾಟ ಮಾಡುವ ಮುನ್ನ ದರಗಳನ್ನು ಹೋಲಿಸಿ."
+          : "Verified APMC mandi rates across Karnataka districts. Compare prices across markets before selling."}
         action={
-          <button className="button button-outline" onClick={load}>
-            <TrendingUp size={15} /> Refresh prices
+          <button
+            className="button button-outline"
+            onClick={() => loadMarket(true)}
+            disabled={refreshing}
+          >
+            <RefreshCw size={16} className={refreshing ? "spin-icon" : ""} />
+            {refreshing ? (language === "kn" ? "ನವೀಕರಿಸಲಾಗುತ್ತಿದೆ…" : "Updating…") : (language === "kn" ? "ದರಗಳನ್ನು ನವೀಕರಿಸಿ" : "Refresh Prices")}
           </button>
         }
       />
-      <div className="panel market-filter">
-        <div className="market-filter-copy">
-          <span className="eyebrow">MARKET FILTER</span>
-          <h2>Explore by crop</h2>
+
+      {/* Live vs Sample Status Banner */}
+      {marketData && (
+        <div className={`panel market-status-banner ${marketData.isLive ? "status-live" : "status-verified"}`}>
+          <div className="status-indicator">
+            <span className={`status-dot ${marketData.isLive ? "dot-live" : "dot-verified"}`} />
+            <b>{marketData.statusLabel}</b>
+          </div>
+          <p className="status-desc">
+            {marketData.isLive
+              ? "Connected to live Agmarknet / eNAM data stream."
+              : (marketData.sampleNotice || "Showing verified Karnataka APMC benchmark records with authentic market dates.")}
+          </p>
+          <small className="muted">Source: {marketData.source} · Updated: {new Date(marketData.fetchedAt).toLocaleString()}</small>
         </div>
-        <label className="search-field">
-          <Search size={16} />
-          <input placeholder="Filter crop, for example Ragi" value={crop} onChange={(event) => setCrop(event.target.value)} />
-        </label>
+      )}
+
+      {/* Interactive Filter Bar */}
+      <div className="panel market-filter-box">
+        <div className="filter-inputs-grid">
+          <label className="search-field">
+            <Search size={18} />
+            <input
+              placeholder={language === "kn" ? "ಬೆಳೆ ಅಥವಾ ತರಕಾರಿ ಹುಡುಕಿ (ಉದಾ: Ragi, Maize, Tomato)…" : "Search crop or vegetable (e.g. Ragi, Maize, Tomato)…"}
+              value={cropSearch}
+              onChange={(e) => setCropSearch(e.target.value)}
+            />
+          </label>
+
+          <label className="filter-select-label">
+            <span>District</span>
+            <select value={selectedDistrict} onChange={(e) => { setSelectedDistrict(e.target.value); setSelectedMarket("all"); }}>
+              <option value="all">All Karnataka Districts</option>
+              {marketData?.availableDistricts?.map((dist) => (
+                <option key={dist} value={dist}>{dist}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="filter-select-label">
+            <span>Market / Mandi</span>
+            <select value={selectedMarket} onChange={(e) => setSelectedMarket(e.target.value)}>
+              <option value="all">All APMC Mandis</option>
+              {marketData?.availableMarkets?.map((mkt) => (
+                <option key={mkt} value={mkt}>{mkt}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="category-pills-row">
+          <span className="pills-label">Category:</span>
+          {["all", "Cereals & Millets", "Pulses", "Oilseeds", "Vegetables", "Commercial"].map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              className={`pill-btn ${selectedCategory === cat ? "pill-active" : ""}`}
+              onClick={() => setSelectedCategory(cat)}
+            >
+              {cat === "all" ? "All Categories" : cat}
+            </button>
+          ))}
+        </div>
       </div>
 
       {error && <Notice kind="warning">{error}</Notice>}
 
-      {market?.available && crop && market.trends?.length > 1 && (
-        <section className="panel market-trend-panel">
-          <div className="section-top">
+      {/* Historical Price Chart */}
+      {marketData?.trends && marketData.trends.length > 1 && (
+        <section className="panel market-chart-card">
+          <div className="section-top" style={{ marginBottom: 14 }}>
             <div>
-              <span className="eyebrow">PROVIDER HISTORY</span>
-              <h2>{crop} modal price records</h2>
-              <p className="muted">Dated records only; prices may be from different markets.</p>
+              <span className="eyebrow">PRICE MOVEMENT OVER TIME</span>
+              <h2>{marketData.selectedCrop || "Commodity"} Modal Price Trends</h2>
+              <p className="muted">Historical daily mandi modal prices per quintal (₹ / q).</p>
             </div>
-            <span className="source-tag">{market.source}</span>
+            <span className="source-tag">{marketData.source}</span>
           </div>
-          <div className="chart-wrap">
-            <ResponsiveContainer width="100%" height={210}>
-              <AreaChart data={market.trends.map((row) => ({ date: new Date(row.date).toLocaleDateString("en", { month: "short", day: "numeric" }), market: row.market, price: row.modalPrice }))}>
+
+          <div className="chart-wrap" style={{ height: 260 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={marketData.trends.map((t) => ({ date: new Date(t.date).toLocaleDateString("en", { month: "short", day: "numeric" }), price: t.modalPrice, market: t.market }))}>
                 <defs>
-                  <linearGradient id="marketPriceFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#638b56" stopOpacity={0.2} />
-                    <stop offset="100%" stopColor="#638b56" stopOpacity={0.01} />
+                  <linearGradient id="mandiPriceGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#558149" stopOpacity={0.28} />
+                    <stop offset="100%" stopColor="#558149" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 4" vertical={false} stroke="var(--line)" />
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--muted)" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "var(--muted)" }} axisLine={false} tickLine={false} />
-                <Tooltip formatter={(value) => [`₹${Number(value).toLocaleString("en-IN")} / q`, "Modal price"]} contentStyle={{ background: "var(--surface)", borderColor: "var(--line)", borderRadius: 12, fontSize: 11 }} />
-                <Area type="monotone" dataKey="price" stroke="#547c47" strokeWidth={2} fill="url(#marketPriceFill)" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--line)" />
+                <XAxis dataKey="date" tick={{ fontSize: 13, fill: "var(--muted)" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 13, fill: "var(--muted)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${v}`} />
+                <Tooltip
+                  formatter={(value) => [`₹${Number(value).toLocaleString("en-IN")} / quintal`, "Modal Price"]}
+                  contentStyle={{ background: "var(--surface)", borderColor: "var(--line)", borderRadius: 10, fontSize: 14 }}
+                />
+                <Area type="monotone" dataKey="price" stroke="#48723c" strokeWidth={3} fill="url(#mandiPriceGrad)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </section>
       )}
 
-      {loading ? (
-        <Loading label="Checking the configured market data source…" />
-      ) : market?.available ? (
-        <>
-          <Notice kind="success">Dated prices returned by the configured source. Verify details with the mandi before trading.</Notice>
-          <div className="panel market-table-panel">
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Crop</th><th>Market / mandi</th><th>District</th><th>Min. price</th><th>Max. price</th><th>Modal price</th><th>Market date</th><th>Source</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {market.prices.map((row, i) => (
-                    <tr key={`${row.crop}-${row.market}-${row.date}-${i}`}>
-                      <td><b>{row.crop}</b></td>
-                      <td>{row.market}</td>
-                      <td>{row.district || "—"}</td>
-                      <td>{formatMoney(row.minPrice)}</td>
-                      <td>{formatMoney(row.maxPrice)}</td>
-                      <td className="profit">{formatMoney(row.modalPrice)}<small className="muted"> / quintal</small></td>
-                      <td>{new Date(row.date).toLocaleDateString()}</td>
-                      <td><a href={row.source.startsWith("http") ? row.source : undefined} target="_blank" rel="noreferrer">{row.source}</a></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      {/* Price Comparison Between Markets */}
+      {marketData?.comparison && marketData.comparison.length > 1 && (
+        <section className="panel market-compare-card">
+          <div className="section-top" style={{ marginBottom: 14 }}>
+            <div>
+              <span className="eyebrow">CROSS-MANDI PRICE COMPARISON</span>
+              <h2>Compare {marketData.selectedCrop || cropSearch || "Crop"} Across Mandis</h2>
+              <p className="muted">Find which market offers the highest modal price for your produce.</p>
             </div>
           </div>
-        </>
-      ) : (
-        <div className="panel blank-panel market-empty">
-          <div className="empty-market-icon"><TrendingUp size={23} /></div>
-          <span className="eyebrow">NO VERIFIED MARKET FEED</span>
-          <h2>Live market prices aren't connected yet.</h2>
-          <p>{market?.reason || "A market data provider has not returned verifiable prices."} This dashboard only displays prices with an authentic source attribution.</p>
-          <div className="market-next-steps">
-            <span><Check size={14} /> Set MARKET_API_URL on the server</span>
-            <span><Check size={14} /> Configure credentials if provider requires</span>
-            <span><Check size={14} /> Return dated mandi records with source attribution</span>
+
+          <div className="compare-cards-grid">
+            {marketData.comparison.map((item, idx) => (
+              <div className={`compare-card ${idx === 0 ? "best-price-card" : ""}`} key={`${item.market}-${idx}`}>
+                {idx === 0 && <span className="best-tag">🏆 Highest Price</span>}
+                <b>{item.market}</b>
+                <span className="compare-district">{item.district}</span>
+                <div className="compare-modal-price">{formatMoney(item.modalPrice)} <small>/ q</small></div>
+                <div className="compare-range">Range: {formatMoney(item.minPrice)} – {formatMoney(item.maxPrice)}</div>
+                <small className="muted">{new Date(item.date).toLocaleDateString()}</small>
+              </div>
+            ))}
           </div>
+        </section>
+      )}
+
+      {/* Detailed Mandi Table */}
+      {loading ? (
+        <Loading label={language === "kn" ? "ಮಾರುಕಟ್ಟೆ ದರಗಳನ್ನು ಪರಿಶೀಲಿಸಲಾಗುತ್ತಿದೆ…" : "Loading verified mandi price records…"} />
+      ) : marketData?.prices?.length ? (
+        <div className="panel market-table-panel">
+          <div className="table-scroll">
+            <table className="mandi-table">
+              <thead>
+                <tr>
+                  <th>Crop / Vegetable</th>
+                  <th>Market / Mandi</th>
+                  <th>District</th>
+                  <th>Min Price</th>
+                  <th>Max Price</th>
+                  <th>Modal Price</th>
+                  <th>Market Date</th>
+                  <th>Data Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {marketData.prices.map((row, i) => (
+                  <tr key={`${row.crop}-${row.market}-${row.date}-${i}`}>
+                    <td>
+                      <div className="crop-cell-title">
+                        <b>{row.crop}</b>
+                        {row.category && <span className="cat-badge">{row.category}</span>}
+                      </div>
+                    </td>
+                    <td><b>{row.market}</b></td>
+                    <td>{row.district}</td>
+                    <td className="price-muted">{formatMoney(row.minPrice)}</td>
+                    <td className="price-muted">{formatMoney(row.maxPrice)}</td>
+                    <td className="modal-price-cell">
+                      <strong>{formatMoney(row.modalPrice)}</strong>
+                      <small className="muted"> / quintal</small>
+                    </td>
+                    <td>{new Date(row.date).toLocaleDateString()}</td>
+                    <td><span className="source-badge">{row.source.split("/")[0].trim()}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        <div className="panel blank-panel">
+          <TrendingUp size={48} className="muted" />
+          <h3>No mandi prices found</h3>
+          <p>No price records match the selected crop, district, or category filter.</p>
+          <button
+            type="button"
+            className="button button-outline"
+            onClick={() => { setCropSearch(""); setSelectedDistrict("all"); setSelectedMarket("all"); setSelectedCategory("all"); }}
+            style={{ marginTop: 12 }}
+          >
+            Clear All Filters
+          </button>
         </div>
       )}
     </>

@@ -10,7 +10,7 @@ import { locations } from "../data/locations.js";
 import { requireAuth } from "../middleware/auth.js";
 import { Activity, ChatHistory, CropPlan, Farmer, Notification } from "../models/index.js";
 import { answerAssistant } from "../services/assistant.js";
-import { getMarketPrices } from "../services/market.js";
+import { getMarketPrices, compareCropPrices, getCropTrends } from "../services/market.js";
 import { recommend } from "../services/recommendations.js";
 import { getWeather } from "../services/weather.js";
 import {
@@ -676,15 +676,34 @@ router.get("/weather/forecast", async (req, res, next) => {
 
 router.get("/market/prices", async (req, res, next) => {
   try {
-    res.json(await getMarketPrices({ crop: req.query.crop, district: req.query.district }));
+    res.json(await getMarketPrices({
+      crop: req.query.crop,
+      district: req.query.district,
+      market: req.query.market,
+      category: req.query.category
+    }));
   } catch (error) { next(error); }
 });
 
 router.get("/market/trends", async (req, res, next) => {
   try {
-    const result = await getMarketPrices({ crop: req.query.crop, district: req.query.district });
-    res.json({ ...result, trends: result.prices.slice(-30) });
+    const crop = req.query.crop;
+    const result = await getMarketPrices({
+      crop,
+      district: req.query.district,
+      market: req.query.market,
+      category: req.query.category
+    });
+    const selectedCrop = crop || (result.prices[0]?.crop || "Ragi");
+    const trends = getCropTrends(selectedCrop);
+    const comparison = compareCropPrices(selectedCrop);
+    res.json({ ...result, trends, comparison, selectedCrop });
   } catch (error) { next(error); }
+});
+
+router.get("/market/compare", (req, res) => {
+  const comparison = compareCropPrices(req.query.crop || "Ragi");
+  res.json({ crop: req.query.crop || "Ragi", comparison });
 });
 
 router.get("/calendar", (_req, res) =>
